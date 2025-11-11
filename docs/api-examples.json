@@ -1,0 +1,177 @@
+{
+  "members": {
+    "list": {
+      "url": "/api/members?page=1&limit=10&status=active",
+      "method": "GET",
+      "response": {
+        "success": true,
+        "data": [
+          {
+            "id": "123e4567-e89b-12d3-a456-426614174000",
+            "monday_member_id": "12345",
+            "name": "John Doe",
+            "email": "john@example.com",
+            "phone": "+1234567890",
+            "status": "active",
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+          }
+        ],
+        "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 150,
+          "totalPages": 15
+        }
+      }
+    },
+    "detail": {
+      "url": "/api/members/123e4567-e89b-12d3-a456-426614174000",
+      "method": "GET",
+      "response": {
+        "success": true,
+        "data": {
+          "id": "123e4567-e89b-12d3-a456-426614174000",
+          "monday_member_id": "12345",
+          "name": "John Doe",
+          "email": "john@example.com",
+          "phone": "+1234567890",
+          "status": "active",
+          "created_at": "2024-01-15T10:30:00Z",
+          "updated_at": "2024-01-15T10:30:00Z",
+          "contracts": [
+            {
+              "id": "456e7890-e89b-12d3-a456-426614174001",
+              "monday_contract_id": "67890",
+              "contract_type": "Premium Membership",
+              "start_date": "2024-01-01",
+              "end_date": "2024-12-31",
+              "monthly_fee": 99.99,
+              "status": "active",
+              "created_at": "2024-01-15T10:30:00Z",
+              "updated_at": "2024-01-15T10:30:00Z"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "contracts": {
+    "list": {
+      "url": "/api/contracts?page=1&limit=10&status=active",
+      "method": "GET",
+      "response": {
+        "success": true,
+        "data": [
+          {
+            "id": "456e7890-e89b-12d3-a456-426614174001",
+            "monday_contract_id": "67890",
+            "member_id": "123e4567-e89b-12d3-a456-426614174000",
+            "contract_type": "Premium Membership",
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31",
+            "monthly_fee": 99.99,
+            "status": "active",
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z",
+            "members": {
+              "id": "123e4567-e89b-12d3-a456-426614174000",
+              "name": "John Doe",
+              "email": "john@example.com",
+              "status": "active"
+            }
+          }
+        ],
+        "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 180,
+          "totalPages": 18
+        }
+      }
+    }
+  },
+  "webhook": {
+    "monday_create_pulse": {
+      "url": "/api/webhook/monday",
+      "method": "POST",
+      "payload": {
+        "type": "create_pulse",
+        "triggerTime": "2024-01-15T10:30:00Z",
+        "subscriptionId": 12345,
+        "userId": 67890,
+        "originalTriggerUuid": "uuid-here",
+        "boardId": 123456789,
+        "pulseId": 98765,
+        "pulseName": "John Doe",
+        "changedAt": 1705315800,
+        "isTopGroup": true,
+        "groupId": "group123"
+      },
+      "response": {
+        "success": true,
+        "message": "Webhook processed successfully"
+      }
+    },
+    "monday_update_column": {
+      "url": "/api/webhook/monday",
+      "method": "POST",
+      "payload": {
+        "type": "update_column_value",
+        "triggerTime": "2024-01-15T10:30:00Z",
+        "subscriptionId": 12345,
+        "userId": 67890,
+        "originalTriggerUuid": "uuid-here",
+        "boardId": 123456789,
+        "pulseId": 98765,
+        "pulseName": "John Doe",
+        "columnId": "email",
+        "columnType": "email",
+        "value": {
+          "email": {
+            "email": "john.doe@example.com",
+            "text": "john.doe@example.com"
+          }
+        },
+        "previousValue": null,
+        "changedAt": 1705315800,
+        "isTopGroup": true,
+        "groupId": "group123"
+      },
+      "response": {
+        "success": true,
+        "message": "Webhook processed successfully"
+      }
+    }
+  },
+  "stats": {
+    "url": "/api/stats",
+    "method": "GET",
+    "response": {
+      "success": true,
+      "data": {
+        "members": {
+          "total": 150,
+          "active": 142,
+          "inactive": 8
+        },
+        "contracts": {
+          "total": 180,
+          "active": 165,
+          "inactive": 15
+        },
+        "revenue": {
+          "monthly": 12500.0,
+          "currency": "USD"
+        },
+        "recentActivity": [
+          {
+            "webhook_type": "create_pulse",
+            "processed_at": "2024-01-15T10:30:00Z",
+            "status": "received"
+          }
+        ]
+      }
+    }
+  }
+}
