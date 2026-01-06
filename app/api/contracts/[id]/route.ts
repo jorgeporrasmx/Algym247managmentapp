@@ -1,73 +1,121 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/server"
-
-interface MemberData {
-  id: string
-  monday_member_id: string
-  name: string
-  email: string
-  phone: string
-  status: string
-  created_at: string
-  updated_at: string
-}
-
-interface ContractWithMember {
-  id: string
-  monday_contract_id: string
-  member_id: string
-  contract_type: string
-  start_date: string
-  end_date: string
-  monthly_fee: number
-  status: string
-  created_at: string
-  updated_at: string
-  members: MemberData
-}
-
-interface SupabaseError extends Error {
-  code?: string
-}
+import { ContractsService } from "@/lib/firebase/contracts-service"
+import { MembersService } from "@/lib/firebase/members-service"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const supabase = await createClient()
+    const contractsService = ContractsService.getInstance()
+    const membersService = MembersService.getInstance()
 
-    const { data: contract, error } = await supabase
-      .from("contracts")
-      .select(`
-        *,
-        members (
-          id,
-          monday_member_id,
-          name,
-          email,
-          phone,
-          status,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq("id", id)
-      .single() as { data: ContractWithMember | null; error: SupabaseError | null }
+    const contract = await contractsService.getContract(id)
 
-    if (error) {
-      if (error.code === "PGRST116") {
-        return NextResponse.json({ success: false, error: "Contract not found" }, { status: 404 })
+    if (!contract) {
+      return NextResponse.json(
+        { success: false, error: "Contract not found" },
+        { status: 404 }
+      )
+    }
+
+    // Enrich with member data
+    let member = null
+    if (contract.member_id) {
+      const memberData = await membersService.getMember(contract.member_id)
+      if (memberData) {
+        member = {
+          id: memberData.id,
+          name: memberData.name || `${memberData.first_name} ${memberData.paternal_last_name}`,
+          email: memberData.email,
+          primary_phone: memberData.primary_phone,
+          status: memberData.status,
+          created_at: memberData.created_at,
+          updated_at: memberData.updated_at
+        }
       }
-
-      console.error("[v0] Error fetching contract:", error)
-      return NextResponse.json({ success: false, error: "Failed to fetch contract" }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      data: contract,
+      data: {
+        ...contract,
+        member
+      }
     })
   } catch (error) {
-    console.error("[v0] Contract detail API error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[Contracts] Get contract error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const contractsService = ContractsService.getInstance()
+
+    const body = await request.json()
+
+    const contract = await contractsService.getContract(id)
+
+    if (!contract) {
+      return NextResponse.json(
+        { success: false, error: "Contract not found" },
+        { status: 404 }
+      )
+    }
+
+    const updatedContract = await contractsService.updateContract(id, body)
+
+    return NextResponse.json({
+      success: true,
+      data: updatedContract
+    })
+  } catch (error) {
+    console.error("[Contracts] Update contract error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const contractsService = ContractsService.getInstance()
+
+    const { searchParams } = new URL(request.url)
+    const reason = searchParams.get("reason") || undefined
+
+    const contract = await contractsService.getContract(id)
+
+    if (!contract) {
+      return NextResponse.json(
+        { success: false, error: "Contract not found" },
+        { status: 404 }
+      )
+    }
+
+    const success = await contractsService.cancelContract(id, reason)
+
+    if (!success) {
+      return NextResponse.json(
+        { success: false, error: "Failed to cancel contract" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Contract cancelled successfully"
+    })
+  } catch (error) {
+    console.error("[Contracts] Cancel contract error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
