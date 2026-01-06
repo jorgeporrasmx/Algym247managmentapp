@@ -58,10 +58,15 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<AuthRe
 
     const accessLevel = getAccessLevelFromString(employee.access_level as string)
 
+    // Ensure employee has an ID
+    if (!employee.id) {
+      return { success: false, error: "Employee data is incomplete" }
+    }
+
     return {
       success: true,
       user: {
-        id: employee.id!,
+        id: employee.id,
         employee_id: employee.employee_id,
         email: employee.email,
         name: employee.name,

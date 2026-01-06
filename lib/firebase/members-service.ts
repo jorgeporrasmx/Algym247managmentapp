@@ -261,7 +261,7 @@ export class MembersService {
       let q = query(collection(db, COLLECTION_NAME))
       
       if (criteria.email) {
-        q = query(q, where('email', '==', criteria.email))
+        q = query(q, where('email', '==', criteria.email.toLowerCase()))
       } else if (criteria.phone) {
         q = query(q, where('primary_phone', '==', criteria.phone))
       } else if (criteria.member_id) {

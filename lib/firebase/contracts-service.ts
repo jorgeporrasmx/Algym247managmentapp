@@ -357,3 +357,5 @@ export class ContractsService {
     }
   }
 }
+
+export default ContractsService.getInstance()

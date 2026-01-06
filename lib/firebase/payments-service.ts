@@ -399,3 +399,5 @@ export class PaymentsService {
     }
   }
 }
+
+export default PaymentsService.getInstance()

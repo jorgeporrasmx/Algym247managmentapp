@@ -1,9 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import MembersService from "@/lib/firebase/members-service"
 import MondaySyncManager from "@/lib/monday/sync-manager"
+import { getAuthenticatedUser, requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication - return limited data if not authenticated
+    const authResult = await getAuthenticatedUser(request)
     const { searchParams } = new URL(request.url)
 
     const page = Number.parseInt(searchParams.get("page") || "1")
@@ -50,7 +54,25 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Require authentication to create members
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const {
       name,

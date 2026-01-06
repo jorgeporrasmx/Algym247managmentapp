@@ -120,9 +120,9 @@ export class SalesService {
     const transaction_id = this.generateTransactionId()
 
     // Calculate total if not provided
-    const total_amount = saleData.total_amount || saleData.items.reduce(
-      (sum, item) => sum + item.total_price, 0
-    )
+    const total_amount = saleData.total_amount || (saleData.items?.reduce(
+      (sum, item) => sum + (item.total_price || 0), 0
+    ) ?? 0)
 
     const docData = {
       ...saleData,
@@ -483,3 +483,5 @@ export class SalesService {
     }
   }
 }
+
+export default SalesService.getInstance()
