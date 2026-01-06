@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { EmployeesService } from "@/lib/employees-service"
+import { EmployeesService } from "@/lib/firebase/employees-service"
 
 export async function GET(request: NextRequest) {
   try {
