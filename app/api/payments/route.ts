@@ -1,148 +1,170 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/server"
+import { PaymentsService, Payment } from "@/lib/firebase/payments-service"
+import { MembersService } from "@/lib/firebase/members-service"
+import { ContractsService } from "@/lib/firebase/contracts-service"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const paymentsService = PaymentsService.getInstance()
+    const membersService = MembersService.getInstance()
+    const contractsService = ContractsService.getInstance()
+
     const { searchParams } = new URL(request.url)
 
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Math.min(Number.parseInt(searchParams.get("limit") || "50"), 100)
-    const status = searchParams.get("status")
-    const memberId = searchParams.get("member_id")
-    const paymentMethod = searchParams.get("payment_method")
+    const status = searchParams.get("status") || undefined
+    const memberId = searchParams.get("member_id") || undefined
+    const contractId = searchParams.get("contract_id") || undefined
+    const paymentMethod = searchParams.get("payment_method") || undefined
 
-    const offset = (page - 1) * limit
+    const { payments, total } = await paymentsService.getPayments({
+      page,
+      limit,
+      status,
+      memberId,
+      contractId,
+      paymentMethod
+    })
 
-    let query = supabase
-      .from("payments")
-      .select(
-        `
-        *,
-        members (
-          id,
-          name,
-          email
-        ),
-        contracts (
-          id,
-          contract_type,
-          monthly_fee
-        )
-      `,
-        { count: "exact" },
-      )
-      .order("payment_date", { ascending: false })
+    // Enrich payments with member and contract data
+    const paymentsWithDetails = await Promise.all(
+      payments.map(async (payment) => {
+        let member = null
+        let contract = null
 
-    if (status) {
-      query = query.eq("status", status)
-    }
+        if (payment.member_id) {
+          const memberData = await membersService.getMember(payment.member_id)
+          if (memberData) {
+            member = {
+              id: memberData.id,
+              name: memberData.name || `${memberData.first_name} ${memberData.paternal_last_name}`,
+              email: memberData.email
+            }
+          }
+        }
 
-    if (memberId) {
-      query = query.eq("member_id", memberId)
-    }
+        if (payment.contract_id) {
+          const contractData = await contractsService.getContract(payment.contract_id)
+          if (contractData) {
+            contract = {
+              id: contractData.id,
+              contract_type: contractData.contract_type,
+              monthly_fee: contractData.monthly_fee
+            }
+          }
+        }
 
-    if (paymentMethod) {
-      query = query.eq("payment_method", paymentMethod)
-    }
-
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: payments, error, count } = await query
-
-    if (error) {
-      console.error("[v0] Error fetching payments:", error)
-      return NextResponse.json({ success: false, error: "Failed to fetch payments" }, { status: 500 })
-    }
+        return {
+          ...payment,
+          member,
+          contract
+        }
+      })
+    )
 
     return NextResponse.json({
       success: true,
-      data: payments,
+      data: paymentsWithDetails,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
-      },
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
     })
   } catch (error) {
-    console.error("[v0] Payments API error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[Payments] API error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const paymentsService = PaymentsService.getInstance()
+    const membersService = MembersService.getInstance()
+    const contractsService = ContractsService.getInstance()
+
     const body = await request.json()
 
-    const { contract_id, member_id, amount, payment_date, payment_method = "credit_card", status = "completed", transaction_id, notes } = body
+    const {
+      contract_id,
+      member_id,
+      amount,
+      payment_date,
+      due_date,
+      payment_method = "credit_card",
+      status = "pending",
+      transaction_id,
+      notes
+    } = body
 
-    if (!contract_id || !member_id || !amount || !payment_date) {
-      return NextResponse.json({ success: false, error: "Contract ID, member ID, amount, and payment date are required" }, { status: 400 })
+    if (!contract_id || !member_id || !amount) {
+      return NextResponse.json(
+        { success: false, error: "Contract ID, member ID, and amount are required" },
+        { status: 400 }
+      )
     }
 
-    // Verify contract and member exist
-    const { data: contract, error: contractError } = await supabase
-      .from("contracts")
-      .select("id, contract_type")
-      .eq("id", contract_id)
-      .single()
-
-    if (contractError || !contract) {
-      return NextResponse.json({ success: false, error: "Contract not found" }, { status: 404 })
+    // Verify contract exists
+    const contract = await contractsService.getContract(contract_id)
+    if (!contract) {
+      return NextResponse.json(
+        { success: false, error: "Contract not found" },
+        { status: 404 }
+      )
     }
 
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("id, name")
-      .eq("id", member_id)
-      .single()
-
-    if (memberError || !member) {
-      return NextResponse.json({ success: false, error: "Member not found" }, { status: 404 })
+    // Verify member exists
+    const member = await membersService.getMember(member_id)
+    if (!member) {
+      return NextResponse.json(
+        { success: false, error: "Member not found" },
+        { status: 404 }
+      )
     }
 
-    const { data: payment, error } = await supabase
-      .from("payments")
-      .insert({
-        contract_id,
-        member_id,
-        amount: Number(amount),
-        payment_date,
-        payment_method,
-        status,
-        transaction_id,
-        notes,
-      })
-      .select(`
-        *,
-        members (
-          id,
-          name,
-          email
-        ),
-        contracts (
-          id,
-          contract_type,
-          monthly_fee
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error("[v0] Error creating payment:", error)
-      return NextResponse.json({ success: false, error: "Failed to create payment" }, { status: 500 })
+    const paymentData: Omit<Payment, 'id' | 'payment_id' | 'created_at' | 'updated_at'> = {
+      contract_id,
+      member_id,
+      amount: Number(amount),
+      payment_date: payment_date ? new Date(payment_date) : new Date(),
+      due_date: due_date ? new Date(due_date) : undefined,
+      payment_method,
+      status,
+      transaction_id,
+      notes
     }
 
-    console.log("[v0] Created new payment:", payment)
+    const payment = await paymentsService.createPayment(paymentData)
+
+    // Return with member and contract data
+    const paymentWithDetails = {
+      ...payment,
+      member: {
+        id: member.id,
+        name: member.name || `${member.first_name} ${member.paternal_last_name}`,
+        email: member.email
+      },
+      contract: {
+        id: contract.id,
+        contract_type: contract.contract_type,
+        monthly_fee: contract.monthly_fee
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      data: payment,
+      data: paymentWithDetails
     })
   } catch (error) {
-    console.error("[v0] Create payment API error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[Payments] Create error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
