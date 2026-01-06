@@ -2,10 +2,43 @@ import { type NextRequest, NextResponse } from "next/server"
 import { EmployeeAuthService } from "@/lib/firebase/employee-auth"
 import { EmployeesService } from "@/lib/firebase/employees-service"
 import { cookies } from "next/headers"
+import { Permission, hasPermission, canManageEmployee, getAccessLevelFromString } from "@/lib/permissions"
 
 // Session cookie configuration
 const SESSION_COOKIE_NAME = 'employee_session'
 const SESSION_MAX_AGE = 8 * 60 * 60 // 8 hours in seconds
+
+// Helper to get current session from cookie
+async function getCurrentSession() {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
+  if (!sessionCookie) return null
+  try {
+    return JSON.parse(sessionCookie.value)
+  } catch {
+    return null
+  }
+}
+
+// Helper to check if user can manage target employee
+async function canManageTargetEmployee(sessionAccessLevel: string, targetEmployeeId: string): Promise<boolean> {
+  const employeesService = EmployeesService.getInstance()
+  const targetEmployee = await employeesService.getEmployee(targetEmployeeId)
+
+  if (!targetEmployee) return false
+
+  const sessionLevel = getAccessLevelFromString(sessionAccessLevel)
+  const targetLevel = getAccessLevelFromString(targetEmployee.access_level || 'entrenador')
+
+  // Check if user has general employee management permission
+  const hasManageAll = hasPermission(sessionLevel, Permission.MANAGE_ALL_EMPLOYEES)
+  const hasManageLower = hasPermission(sessionLevel, Permission.MANAGE_LOWER_EMPLOYEES)
+
+  if (hasManageAll) return true
+  if (hasManageLower) return canManageEmployee(sessionLevel, targetLevel)
+
+  return false
+}
 
 // POST /api/auth/employee - Login
 export async function POST(request: NextRequest) {
@@ -17,8 +50,25 @@ export async function POST(request: NextRequest) {
 
     // Handle different actions
     if (action === 'create-credentials') {
-      // Create credentials for an employee
+      // Create credentials for an employee (requires management permission)
       const { employee_id, password: newPassword } = body
+
+      // Verify caller has permission
+      const session = await getCurrentSession()
+      if (!session) {
+        return NextResponse.json(
+          { success: false, error: "Authentication required" },
+          { status: 401 }
+        )
+      }
+
+      const canManage = await canManageTargetEmployee(session.accessLevel, employee_id)
+      if (!canManage) {
+        return NextResponse.json(
+          { success: false, error: "Permission denied: cannot manage this employee" },
+          { status: 403 }
+        )
+      }
 
       if (!employee_id || !newPassword) {
         return NextResponse.json(
@@ -83,8 +133,25 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'reset-password') {
-      // Reset password (admin action)
+      // Reset password (admin action - requires management permission)
       const { employee_id, new_password } = body
+
+      // Verify caller has permission
+      const session = await getCurrentSession()
+      if (!session) {
+        return NextResponse.json(
+          { success: false, error: "Authentication required" },
+          { status: 401 }
+        )
+      }
+
+      const canManage = await canManageTargetEmployee(session.accessLevel, employee_id)
+      if (!canManage) {
+        return NextResponse.json(
+          { success: false, error: "Permission denied: cannot manage this employee" },
+          { status: 403 }
+        )
+      }
 
       if (!employee_id || !new_password) {
         return NextResponse.json(

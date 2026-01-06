@@ -182,8 +182,21 @@ const DEFAULT_PASSWORD = "Algym247!"
 // POST /api/seed/employees - Seed initial employees
 export async function POST(request: NextRequest) {
   try {
-    // Check for authorization (simple check - in production use proper auth)
+    // Security: Only allow in development or with secret key
     const { searchParams } = new URL(request.url)
+    const seedKey = searchParams.get("key")
+    const expectedKey = process.env.SEED_SECRET_KEY
+
+    const isProduction = process.env.NODE_ENV === 'production'
+    const hasValidKey = expectedKey && seedKey === expectedKey
+
+    if (isProduction && !hasValidKey) {
+      return NextResponse.json({
+        success: false,
+        error: "Seed endpoint is disabled in production. Use SEED_SECRET_KEY to enable."
+      }, { status: 403 })
+    }
+
     const force = searchParams.get("force") === "true"
     const withCredentials = searchParams.get("credentials") !== "false"
 
@@ -246,12 +259,16 @@ export async function POST(request: NextRequest) {
 
     console.log("[Seed] Employees seeded:", results)
 
+    // Log password only in development (never expose in response)
+    if (withCredentials && process.env.NODE_ENV !== 'production') {
+      console.log("[Seed] Default password for seeded employees:", DEFAULT_PASSWORD)
+    }
+
     return NextResponse.json({
       success: true,
       message: "Seed completed",
       results,
-      defaultPassword: withCredentials ? DEFAULT_PASSWORD : undefined,
-      note: withCredentials ? "All employees can login with the default password. They should change it after first login." : undefined
+      note: withCredentials ? "Credentials created. Check server logs for default password in development mode only." : undefined
     })
   } catch (error) {
     console.error("[Seed] Error seeding employees:", error)
