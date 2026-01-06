@@ -1,179 +1,186 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/server"
+import { BookingsService, Booking } from "@/lib/firebase/bookings-service"
+import { SchedulesService } from "@/lib/firebase/schedules-service"
+import { MembersService } from "@/lib/firebase/members-service"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const bookingsService = BookingsService.getInstance()
+    const schedulesService = SchedulesService.getInstance()
+    const membersService = MembersService.getInstance()
+
     const { searchParams } = new URL(request.url)
 
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Math.min(Number.parseInt(searchParams.get("limit") || "50"), 100)
-    const memberId = searchParams.get("member_id")
-    const scheduleId = searchParams.get("schedule_id")
-    const status = searchParams.get("status")
+    const memberId = searchParams.get("member_id") || undefined
+    const scheduleId = searchParams.get("schedule_id") || undefined
+    const status = searchParams.get("status") || undefined
 
-    const offset = (page - 1) * limit
+    const { bookings, total } = await bookingsService.getBookings({
+      page,
+      limit,
+      memberId,
+      scheduleId,
+      status
+    })
 
-    let query = supabase
-      .from("bookings")
-      .select(
-        `
-        *,
-        members (
-          id,
-          name,
-          email
-        ),
-        schedule (
-          id,
-          class_name,
-          instructor,
-          class_type,
-          start_time,
-          end_time,
-          max_capacity,
-          current_bookings
-        )
-      `,
-        { count: "exact" },
-      )
-      .order("booking_date", { ascending: false })
+    // Enrich bookings with member and schedule data
+    const bookingsWithDetails = await Promise.all(
+      bookings.map(async (booking) => {
+        let member = null
+        let schedule = null
 
-    if (memberId) {
-      query = query.eq("member_id", memberId)
-    }
+        if (booking.member_id) {
+          const memberData = await membersService.getMember(booking.member_id)
+          if (memberData) {
+            member = {
+              id: memberData.id,
+              name: memberData.name || `${memberData.first_name} ${memberData.paternal_last_name}`,
+              email: memberData.email
+            }
+          }
+        }
 
-    if (scheduleId) {
-      query = query.eq("schedule_id", scheduleId)
-    }
+        if (booking.schedule_id) {
+          const scheduleData = await schedulesService.getSchedule(booking.schedule_id)
+          if (scheduleData) {
+            schedule = {
+              id: scheduleData.id,
+              class_name: scheduleData.class_name,
+              instructor: scheduleData.instructor,
+              class_type: scheduleData.class_type,
+              start_time: scheduleData.start_time,
+              end_time: scheduleData.end_time,
+              max_capacity: scheduleData.max_capacity,
+              current_bookings: scheduleData.current_bookings
+            }
+          }
+        }
 
-    if (status) {
-      query = query.eq("status", status)
-    }
-
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: bookings, error, count } = await query
-
-    if (error) {
-      console.error("[v0] Error fetching bookings:", error)
-      return NextResponse.json({ success: false, error: "Failed to fetch bookings" }, { status: 500 })
-    }
+        return {
+          ...booking,
+          members: member,
+          schedule
+        }
+      })
+    )
 
     return NextResponse.json({
       success: true,
-      data: bookings,
+      data: bookingsWithDetails,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
-      },
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
     })
   } catch (error) {
-    console.error("[v0] Bookings API error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[Bookings] API error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const bookingsService = BookingsService.getInstance()
+    const schedulesService = SchedulesService.getInstance()
+    const membersService = MembersService.getInstance()
+
     const body = await request.json()
 
     const { schedule_id, member_id, status = "confirmed", notes } = body
 
     if (!schedule_id || !member_id) {
-      return NextResponse.json({ success: false, error: "Schedule ID and member ID are required" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Schedule ID and member ID are required" },
+        { status: 400 }
+      )
     }
 
-    // Verify schedule and member exist
-    const { data: schedule, error: scheduleError } = await supabase
-      .from("schedule")
-      .select("id, class_name, max_capacity, current_bookings")
-      .eq("id", schedule_id)
-      .single()
-
-    if (scheduleError || !schedule) {
-      return NextResponse.json({ success: false, error: "Schedule not found" }, { status: 404 })
+    // Verify schedule exists
+    const schedule = await schedulesService.getSchedule(schedule_id)
+    if (!schedule) {
+      return NextResponse.json(
+        { success: false, error: "Schedule not found" },
+        { status: 404 }
+      )
     }
 
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("id, name")
-      .eq("id", member_id)
-      .single()
-
-    if (memberError || !member) {
-      return NextResponse.json({ success: false, error: "Member not found" }, { status: 404 })
+    // Verify member exists
+    const member = await membersService.getMember(member_id)
+    if (!member) {
+      return NextResponse.json(
+        { success: false, error: "Member not found" },
+        { status: 404 }
+      )
     }
 
     // Check if class is full
     if (schedule.current_bookings >= schedule.max_capacity) {
-      return NextResponse.json({ success: false, error: "Class is full" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Class is full" },
+        { status: 400 }
+      )
     }
 
     // Check if member is already booked for this class
-    const { data: existingBooking } = await supabase
-      .from("bookings")
-      .select("id")
-      .eq("schedule_id", schedule_id)
-      .eq("member_id", member_id)
-      .eq("status", "confirmed")
-      .single()
-
+    const existingBooking = await bookingsService.hasExistingBooking(schedule_id, member_id)
     if (existingBooking) {
-      return NextResponse.json({ success: false, error: "Member is already booked for this class" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Member is already booked for this class" },
+        { status: 400 }
+      )
     }
 
     // Create booking
-    const { data: booking, error } = await supabase
-      .from("bookings")
-      .insert({
-        schedule_id,
-        member_id,
-        status,
-        notes,
-      })
-      .select(`
-        *,
-        members (
-          id,
-          name,
-          email
-        ),
-        schedule (
-          id,
-          class_name,
-          instructor,
-          class_type,
-          start_time,
-          end_time,
-          max_capacity,
-          current_bookings
-        )
-      `)
-      .single()
-
-    if (error) {
-      console.error("[v0] Error creating booking:", error)
-      return NextResponse.json({ success: false, error: "Failed to create booking" }, { status: 500 })
+    const bookingData: Omit<Booking, 'id' | 'booking_id' | 'booking_date' | 'created_at' | 'updated_at'> = {
+      schedule_id,
+      member_id,
+      status,
+      notes
     }
 
-    // Update current_bookings count
-    await supabase
-      .from("schedule")
-      .update({ current_bookings: schedule.current_bookings + 1 })
-      .eq("id", schedule_id)
+    const booking = await bookingsService.createBooking(bookingData)
 
-    console.log("[v0] Created new booking:", booking)
+    // Update current_bookings count in schedule
+    await schedulesService.updateBookingCount(schedule_id, 1)
+
+    console.log("[Bookings] Created new booking:", booking)
+
+    // Return booking with member and schedule data
+    const bookingWithDetails = {
+      ...booking,
+      members: {
+        id: member.id,
+        name: member.name || `${member.first_name} ${member.paternal_last_name}`,
+        email: member.email
+      },
+      schedule: {
+        id: schedule.id,
+        class_name: schedule.class_name,
+        instructor: schedule.instructor,
+        class_type: schedule.class_type,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        max_capacity: schedule.max_capacity,
+        current_bookings: schedule.current_bookings + 1
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      data: booking,
+      data: bookingWithDetails
     })
   } catch (error) {
-    console.error("[v0] Create booking API error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[Bookings] Create error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
