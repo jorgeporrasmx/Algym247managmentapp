@@ -9,27 +9,8 @@ import { Label } from "@/components/ui/label"
 import { AuthenticatedLayout } from "@/components/authenticated-layout"
 import { Plus, Users, Mail, Phone, Calendar, Search, MapPin, CreditCard, Briefcase, Key } from "lucide-react"
 import Link from "next/link"
-
-interface Employee {
-  id: string
-  name: string
-  email: string
-  phone: string
-  primary_phone: string
-  status: string
-  created_at: string
-  first_name: string
-  paternal_last_name: string
-  position: string
-  salary: number
-  hire_date: string
-  department: string
-  city: string
-  state: string
-  employee_id: string
-  access_level: string
-  has_login?: boolean
-}
+import { toast } from "sonner"
+import type { Employee } from "@/lib/types/employees"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -158,7 +139,7 @@ export default function EmployeesPage() {
     if (!selectedEmployee || !loginForm.password) return
 
     if (loginForm.password.length < 8) {
-      alert("La contraseña debe tener al menos 8 caracteres")
+      toast.error("La contraseña debe tener al menos 8 caracteres")
       return
     }
 
@@ -179,15 +160,18 @@ export default function EmployeesPage() {
       const result = await response.json()
 
       if (response.ok && result.success) {
-        alert(`¡Credenciales creadas!\nEl empleado puede iniciar sesión con:\nEmail: ${selectedEmployee.email}\nContraseña: ${loginForm.password}`)
+        toast.success("¡Credenciales creadas!", {
+          description: `Email: ${selectedEmployee.email}`,
+          duration: 5000
+        })
         setShowLoginModal(false)
         fetchEmployees()
       } else {
-        alert(`Error: ${result.error}`)
+        toast.error(result.error || "Error creando credenciales")
       }
     } catch (error) {
       console.error("Error creating login:", error)
-      alert("Error creando credenciales de acceso")
+      toast.error("Error creando credenciales de acceso")
     } finally {
       setGeneratingLogin(false)
     }

@@ -46,8 +46,6 @@ export default function Page() {
         })
 
         if (!response.ok) {
-          const text = await response.text()
-          console.error('Auth response:', text)
           throw new Error("Error de inicio de sesión. Intenta: admin@demo.com / admin123")
         }
 

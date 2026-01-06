@@ -17,65 +17,10 @@ import {
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from './config'
-import { AccessLevel } from '@/lib/permissions'
+import { Employee } from '@/lib/types/employees'
 
-export interface Employee {
-  id?: string
-  monday_item_id?: string
-
-  // Personal Information
-  name: string
-  first_name?: string
-  paternal_last_name?: string
-  maternal_last_name?: string
-  email: string
-  primary_phone: string
-  secondary_phone?: string
-  date_of_birth?: Date | Timestamp
-
-  // Address
-  address_1?: string
-  city?: string
-  state?: string
-  zip_code?: string
-
-  // Employment Information
-  employee_id: string  // Internal ID (EMP001, EMP002, etc.)
-  position: string
-  department: string
-  status: 'active' | 'inactive' | 'pending' | 'terminated'
-  hire_date?: Date | Timestamp
-  salary?: number
-  access_level: AccessLevel
-  manager?: string
-  work_schedule?: string
-
-  // Skills & Certifications
-  skills?: string
-  certifications?: string
-
-  // Emergency Contact
-  emergency_contact_name?: string
-  emergency_contact_phone?: string
-
-  // Additional
-  notes?: string
-  version?: string
-
-  // Authentication (reference to Firebase Auth UID if exists)
-  firebase_uid?: string
-  has_login?: boolean
-  last_login?: Date | Timestamp
-
-  // Sync Metadata (Monday.com)
-  sync_status?: 'synced' | 'pending' | 'error'
-  sync_error?: string
-  last_synced_at?: Date | Timestamp
-
-  // System Metadata
-  created_at?: Date | Timestamp
-  updated_at?: Date | Timestamp
-}
+// Re-export for convenience
+export type { Employee } from '@/lib/types/employees'
 
 const COLLECTION_NAME = 'employees'
 

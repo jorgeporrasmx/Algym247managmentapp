@@ -6,6 +6,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { ConditionalAuthProvider } from "@/components/conditional-auth-provider"
 import { CartProvider } from "@/components/cart-provider"
 import { CartSidebar } from "@/components/cart-sidebar"
+import { Toaster } from "sonner"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <CartProvider>
                 {children}
                 <CartSidebar />
+                <Toaster richColors position="top-right" />
               </CartProvider>
             </ConditionalAuthProvider>
           </SidebarProvider>
