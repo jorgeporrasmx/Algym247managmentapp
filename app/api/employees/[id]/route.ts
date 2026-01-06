@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { EmployeesService } from "@/lib/firebase/employees-service"
+import { requireAnyPermission, getAuthenticatedUser } from "@/lib/api-auth"
+import { Permission, canManageEmployee, getAccessLevelFromString, AccessLevel } from "@/lib/permissions"
 
 // GET /api/employees/[id] - Get a single employee
 export async function GET(
@@ -8,6 +10,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_EMPLOYEE_DETAILS,
+      Permission.MANAGE_ALL_EMPLOYEES,
+      Permission.MANAGE_LOWER_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const employeesService = EmployeesService.getInstance()
 
     // Try to get by Firestore document ID first
@@ -25,12 +39,32 @@ export async function GET(
       )
     }
 
+    // Check if user can view this employee based on hierarchy
+    const targetLevel = getAccessLevelFromString(employee.access_level as string)
+    const canView = canManageEmployee(authCheck.user!.access_level, targetLevel) ||
+                    authCheck.user!.id === employee.id // Can always view own profile
+
+    if (!canView) {
+      // Return limited data for employees at higher level
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: employee.id,
+          name: employee.name,
+          position: employee.position,
+          department: employee.department,
+          email: employee.email,
+          status: employee.status
+        }
+      })
+    }
+
     return NextResponse.json({
       success: true,
       data: employee,
     })
   } catch (error) {
-    console.error("[API] Get employee error:", error)
+    console.error("[Employees] Get employee error:", error)
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -45,6 +79,17 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES,
+      Permission.MANAGE_LOWER_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const body = await request.json()
     const employeesService = EmployeesService.getInstance()
 
@@ -65,6 +110,28 @@ export async function PUT(
         { success: false, error: "Employee not found" },
         { status: 404 }
       )
+    }
+
+    // Check if user can manage this employee based on hierarchy
+    const targetLevel = getAccessLevelFromString(employee.access_level as string)
+    const canManage = canManageEmployee(authCheck.user!.access_level, targetLevel)
+
+    if (!canManage) {
+      return NextResponse.json(
+        { success: false, error: "You cannot modify employees at or above your level" },
+        { status: 403 }
+      )
+    }
+
+    // Prevent changing access_level to a higher level than the manager
+    if (body.access_level) {
+      const newLevel = getAccessLevelFromString(body.access_level)
+      if (!canManageEmployee(authCheck.user!.access_level, newLevel)) {
+        return NextResponse.json(
+          { success: false, error: "You cannot assign an access level higher than your own" },
+          { status: 403 }
+        )
+      }
     }
 
     // Prepare update data
@@ -97,14 +164,14 @@ export async function PUT(
     // Get updated employee
     const updatedEmployee = await employeesService.getEmployee(employeeId)
 
-    console.log("[API] Updated employee:", updatedEmployee)
+    console.log("[Employees] Updated by", authCheck.user?.email, ":", employee.employee_id)
 
     return NextResponse.json({
       success: true,
       data: updatedEmployee,
     })
   } catch (error) {
-    console.error("[API] Update employee error:", error)
+    console.error("[Employees] Update error:", error)
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -119,6 +186,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+
+    // Check authentication - only MANAGE_ALL_EMPLOYEES can delete
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const { searchParams } = new URL(request.url)
     const hard = searchParams.get("hard") === "true"
 
@@ -143,14 +220,39 @@ export async function DELETE(
       )
     }
 
+    // Check if user can delete this employee based on hierarchy
+    const targetLevel = getAccessLevelFromString(employee.access_level as string)
+    const canDelete = canManageEmployee(authCheck.user!.access_level, targetLevel)
+
+    if (!canDelete) {
+      return NextResponse.json(
+        { success: false, error: "You cannot delete employees at or above your level" },
+        { status: 403 }
+      )
+    }
+
+    // Prevent deleting yourself
+    if (authCheck.user!.id === employee.id) {
+      return NextResponse.json(
+        { success: false, error: "You cannot delete your own account" },
+        { status: 403 }
+      )
+    }
+
     if (hard) {
-      // Permanent delete
+      // Permanent delete - requires direccion level
+      if (authCheck.user!.access_level !== AccessLevel.DIRECCION) {
+        return NextResponse.json(
+          { success: false, error: "Only Dirección can permanently delete employees" },
+          { status: 403 }
+        )
+      }
       await employeesService.hardDeleteEmployee(employeeId)
-      console.log("[API] Hard deleted employee:", employeeId)
+      console.log("[Employees] Hard deleted by", authCheck.user?.email, ":", employee.employee_id)
     } else {
       // Soft delete (change status to terminated)
       await employeesService.deleteEmployee(employeeId)
-      console.log("[API] Soft deleted employee:", employeeId)
+      console.log("[Employees] Soft deleted by", authCheck.user?.email, ":", employee.employee_id)
     }
 
     return NextResponse.json({
@@ -158,7 +260,7 @@ export async function DELETE(
       message: hard ? "Employee permanently deleted" : "Employee terminated",
     })
   } catch (error) {
-    console.error("[API] Delete employee error:", error)
+    console.error("[Employees] Delete error:", error)
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }

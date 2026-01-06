@@ -1,8 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { EmployeesService } from "@/lib/firebase/employees-service"
+import { requirePermission, requireAnyPermission, getAuthenticatedUser } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Check for authentication (at least VIEW_EMPLOYEE_DETAILS permission)
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_EMPLOYEE_DETAILS,
+      Permission.MANAGE_ALL_EMPLOYEES,
+      Permission.MANAGE_LOWER_EMPLOYEES
+    ])
+
+    // If not authenticated, still allow GET but with limited data
+    // This allows the login page to work
+    const isAuthenticated = authCheck.authorized
+
     const { searchParams } = new URL(request.url)
 
     const page = Number.parseInt(searchParams.get("page") || "1")
@@ -18,15 +31,36 @@ export async function GET(request: NextRequest) {
       limit
     })
 
-    console.log("[v0] Employees query result:", {
-      employeesCount: result.employees.length,
-      totalCount: result.total,
-      sampleEmployee: result.employees[0] || null,
-    })
+    // If not authenticated, hide sensitive data
+    let employees = result.employees
+    if (!isAuthenticated) {
+      employees = employees.map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        email: emp.email,
+        position: emp.position,
+        department: emp.department,
+        status: emp.status,
+        employee_id: emp.employee_id,
+        access_level: emp.access_level,
+        // Hide sensitive fields
+        salary: undefined,
+        primary_phone: undefined,
+        secondary_phone: undefined,
+        address_1: undefined,
+        city: undefined,
+        state: undefined,
+        zip_code: undefined,
+        date_of_birth: undefined,
+        emergency_contact_name: undefined,
+        emergency_contact_phone: undefined,
+        notes: undefined
+      }))
+    }
 
     return NextResponse.json({
       success: true,
-      data: result.employees,
+      data: employees,
       pagination: {
         page: result.page,
         limit,
@@ -35,13 +69,23 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Employees API error:", error)
+    console.error("[Employees] API error:", error)
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Require MANAGE_ALL_EMPLOYEES or MANAGE_LOWER_EMPLOYEES permission
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES,
+      Permission.MANAGE_LOWER_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const body = await request.json()
 
     const {
@@ -75,9 +119,9 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!name && (!first_name || !paternal_last_name)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Either name or both first_name and paternal_last_name are required" 
+      return NextResponse.json({
+        success: false,
+        error: "Either name or both first_name and paternal_last_name are required"
       }, { status: 400 })
     }
 
@@ -126,14 +170,14 @@ export async function POST(request: NextRequest) {
     const employeesService = EmployeesService.getInstance()
     const employee = await employeesService.createEmployee(employeeData)
 
-    console.log("[v0] Created new employee:", employee)
+    console.log("[Employees] Created by", authCheck.user?.email, ":", employee.employee_id)
 
     return NextResponse.json({
       success: true,
       data: employee,
     })
   } catch (error) {
-    console.error("[v0] Create employee API error:", error)
+    console.error("[Employees] Create error:", error)
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
