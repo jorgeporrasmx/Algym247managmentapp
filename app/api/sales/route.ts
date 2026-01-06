@@ -1,167 +1,177 @@
-import { createClient } from "@/lib/server"
-import { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { SalesService, Sale, SaleItem } from "@/lib/firebase/sales-service"
+import { ProductsService } from "@/lib/firebase/products-service"
+import { MembersService } from "@/lib/firebase/members-service"
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { items, total, customer, payment_method, payment_details, member_id } = await request.json()
+    const salesService = SalesService.getInstance()
+    const membersService = MembersService.getInstance()
 
-    // Check if Supabase is configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const isSupabaseConfigured = supabaseUrl && 
-      supabaseUrl !== 'https://your-project.supabase.co' &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'your-anon-key-here'
+    const { searchParams } = new URL(request.url)
 
-    if (!isSupabaseConfigured) {
-      // Return mock success for development
-      const mockSale = {
-        id: "sale_" + Date.now(),
-        items,
-        total,
-        customer,
-        payment_method,
-        payment_details,
-        member_id,
-        status: "completed",
-        created_at: new Date().toISOString(),
-        transaction_id: "txn_" + Math.random().toString(36).substr(2, 9)
-      }
-      
-      console.log("Mock sale created:", mockSale)
-      return Response.json({ success: true, sale: mockSale, id: mockSale.id })
-    }
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Math.min(Number.parseInt(searchParams.get("limit") || "50"), 100)
+    const paymentMethod = searchParams.get("payment_method") || undefined
+    const paymentStatus = searchParams.get("payment_status") || undefined
+    const memberId = searchParams.get("member_id") || undefined
 
-    const supabase = await createClient()
-
-    // Create the main sale record
-    const saleData = {
-      total_amount: total,
-      payment_method,
-      payment_status: "completed",
-      customer_name: customer?.name || "Cliente General",
-      customer_email: customer?.email || null,
-      customer_phone: customer?.phone || null,
-      customer_address: customer?.address || null,
-      member_id: member_id || null,
-      transaction_id: "txn_" + Math.random().toString(36).substr(2, 9),
-      payment_details: payment_details ? JSON.stringify(payment_details) : null
-    }
-
-    const { data: sale, error: saleError } = await supabase
-      .from("sales")
-      .insert([saleData])
-      .select()
-      .single()
-
-    if (saleError) {
-      console.error("Error creating sale:", saleError)
-      return Response.json({ error: "Failed to create sale", details: saleError.message }, { status: 500 })
-    }
-
-    // Create sale items
-    const saleItems = items.map((item: any) => ({
-      sale_id: sale.id,
-      product_id: item.product_id,
-      product_name: item.name,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity
-    }))
-
-    const { error: itemsError } = await supabase
-      .from("sale_items")
-      .insert(saleItems)
-
-    if (itemsError) {
-      console.error("Error creating sale items:", itemsError)
-      // Try to rollback the sale
-      await supabase.from("sales").delete().eq("id", sale.id)
-      return Response.json({ error: "Failed to create sale items", details: itemsError.message }, { status: 500 })
-    }
-
-    // Update product stock
-    for (const item of items) {
-      const { data: product, error: productError } = await supabase
-        .from("products")
-        .select("stock")
-        .eq("product_id", item.product_id)
-        .single()
-
-      if (!productError && product) {
-        const newStock = Math.max(0, (parseInt(product.stock) || 0) - item.quantity)
-        await supabase
-          .from("products")
-          .update({ stock: newStock.toString() })
-          .eq("product_id", item.product_id)
-      }
-    }
-
-    return Response.json({ 
-      success: true, 
-      sale, 
-      id: sale.id,
-      message: "Sale completed successfully" 
+    const { sales, total } = await salesService.getSales({
+      page,
+      limit,
+      paymentMethod,
+      paymentStatus,
+      memberId
     })
 
+    // Enrich sales with member data
+    const salesWithDetails = await Promise.all(
+      sales.map(async (sale) => {
+        let member = null
+        if (sale.member_id) {
+          const memberData = await membersService.getMember(sale.member_id)
+          if (memberData) {
+            member = {
+              id: memberData.id,
+              name: memberData.name || `${memberData.first_name} ${memberData.paternal_last_name}`,
+              email: memberData.email
+            }
+          }
+        }
+        return {
+          ...sale,
+          member,
+          // Keep sale_items format for backwards compatibility
+          sale_items: sale.items.map(item => ({
+            id: `${sale.id}_${item.product_id}`,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.total_price
+          }))
+        }
+      })
+    )
+
+    return NextResponse.json({
+      success: true,
+      data: salesWithDetails,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
   } catch (error) {
-    console.error("Error processing sale:", error)
-    return Response.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[Sales] API error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
-    // Check if Supabase is configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const isSupabaseConfigured = supabaseUrl && 
-      supabaseUrl !== 'https://your-project.supabase.co' &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'your-anon-key-here'
+    const salesService = SalesService.getInstance()
+    const productsService = ProductsService.getInstance()
 
-    if (!isSupabaseConfigured) {
-      // Return mock sales data for development
-      const mockSales = [
-        {
-          id: "sale_1",
-          total_amount: 299.99,
-          payment_method: "card",
-          payment_status: "completed",
-          customer_name: "Juan Pérez",
-          customer_email: "juan@email.com",
-          transaction_id: "txn_abc123",
-          created_at: new Date().toISOString(),
-          sale_items: [
-            {
-              id: "item_1",
-              product_name: "Proteína Whey",
-              quantity: 1,
-              unit_price: 299.99,
-              total_price: 299.99
-            }
-          ]
+    const body = await request.json()
+
+    const {
+      items,
+      total,
+      customer,
+      payment_method,
+      payment_details,
+      member_id,
+      employee_id,
+      employee_name,
+      sale_type = 'product',
+      notes
+    } = body
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Items are required" },
+        { status: 400 }
+      )
+    }
+
+    if (!payment_method) {
+      return NextResponse.json(
+        { success: false, error: "Payment method is required" },
+        { status: 400 }
+      )
+    }
+
+    // Map items to SaleItem format
+    const saleItems: SaleItem[] = items.map((item: any) => ({
+      product_id: item.product_id || item.id,
+      product_name: item.name || item.product_name,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.price || item.unit_price),
+      total_price: Number(item.quantity) * Number(item.price || item.unit_price)
+    }))
+
+    // Calculate total
+    const calculatedTotal = saleItems.reduce((sum, item) => sum + item.total_price, 0)
+
+    // Create sale data
+    const saleData: Omit<Sale, 'id' | 'sale_id' | 'transaction_id' | 'created_at' | 'updated_at'> = {
+      items: saleItems,
+      total_amount: total || calculatedTotal,
+      customer_name: customer?.name || 'Cliente General',
+      customer_email: customer?.email,
+      customer_phone: customer?.phone,
+      customer_address: customer?.address,
+      member_id,
+      payment_method: payment_method as Sale['payment_method'],
+      payment_status: 'completed',
+      payment_details: payment_details ? JSON.stringify(payment_details) : undefined,
+      sale_type: sale_type as Sale['sale_type'],
+      employee_id,
+      employee_name,
+      notes
+    }
+
+    // Create the sale
+    const sale = await salesService.createSale(saleData)
+
+    // Update product stock for each item
+    for (const item of saleItems) {
+      try {
+        // Try to find product by product_id field first
+        let product = await productsService.getProductByProductId(item.product_id)
+
+        // If not found, try by document ID
+        if (!product) {
+          product = await productsService.getProduct(item.product_id)
         }
-      ]
-      return Response.json({ success: true, data: mockSales })
+
+        if (product && product.id) {
+          await productsService.updateStock(product.id, item.quantity, 'subtract')
+        }
+      } catch (stockError) {
+        console.warn(`[Sales] Could not update stock for product ${item.product_id}:`, stockError)
+        // Don't fail the sale if stock update fails
+      }
     }
 
-    const supabase = await createClient()
+    console.log("[Sales] Created new sale:", sale)
 
-    const { data: sales, error } = await supabase
-      .from("sales")
-      .select(`
-        *,
-        sale_items (
-          *
-        )
-      `)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching sales:", error)
-      return Response.json({ error: "Failed to fetch sales" }, { status: 500 })
-    }
-
-    return Response.json({ success: true, data: sales })
+    return NextResponse.json({
+      success: true,
+      sale,
+      id: sale.id,
+      message: "Sale completed successfully"
+    })
   } catch (error) {
-    console.error("Error fetching sales:", error)
-    return Response.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[Sales] Create error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
   }
 }
