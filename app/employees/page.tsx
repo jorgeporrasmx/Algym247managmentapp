@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AuthenticatedLayout } from "@/components/authenticated-layout"
 import { Plus, Users, Mail, Phone, Calendar, Search, MapPin, CreditCard, Briefcase, Key } from "lucide-react"
 import Link from "next/link"
@@ -40,9 +39,7 @@ export default function EmployeesPage() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [loginForm, setLoginForm] = useState({
-    username: "",
-    password: "",
-    employeeType: "A"
+    password: ""
   })
   const [generatingLogin, setGeneratingLogin] = useState(false)
 
@@ -143,9 +140,7 @@ export default function EmployeesPage() {
   const generateLogin = (employee: Employee) => {
     setSelectedEmployee(employee)
     setLoginForm({
-      username: employee.email.split('@')[0] || employee.first_name?.toLowerCase() + employee.paternal_last_name?.toLowerCase(),
-      password: generateRandomPassword(),
-      employeeType: "A"
+      password: generateRandomPassword()
     })
     setShowLoginModal(true)
   }
@@ -160,30 +155,35 @@ export default function EmployeesPage() {
   }
 
   const handleCreateLogin = async () => {
-    if (!selectedEmployee || !loginForm.username || !loginForm.password) return
+    if (!selectedEmployee || !loginForm.password) return
+
+    if (loginForm.password.length < 8) {
+      alert("La contraseña debe tener al menos 8 caracteres")
+      return
+    }
 
     setGeneratingLogin(true)
     try {
-      const response = await fetch("/api/employee-login", {
+      const response = await fetch("/api/auth/employee", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "create-credentials",
           employee_id: selectedEmployee.id,
-          username: loginForm.username,
-          password: loginForm.password,
-          employee_type: loginForm.employeeType
+          password: loginForm.password
         }),
       })
 
-      if (response.ok) {
-        alert("¡Credenciales de acceso creadas exitosamente!")
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        alert(`¡Credenciales creadas!\nEl empleado puede iniciar sesión con:\nEmail: ${selectedEmployee.email}\nContraseña: ${loginForm.password}`)
         setShowLoginModal(false)
-        fetchEmployees() // Refresh to show updated status
+        fetchEmployees()
       } else {
-        const error = await response.json()
-        alert(`Error: ${error.error}`)
+        alert(`Error: ${result.error}`)
       }
     } catch (error) {
       console.error("Error creating login:", error)
@@ -352,56 +352,37 @@ export default function EmployeesPage() {
                 <h3 className="text-lg font-semibold mb-4">
                   Generar Acceso para {selectedEmployee.name}
                 </h3>
-                
+
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Usuario</Label>
-                    <Input
-                      id="username"
-                      value={loginForm.username}
-                      onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
-                      placeholder="Ingresa nombre de usuario"
-                    />
+                  <div className="text-sm text-muted-foreground bg-muted p-3 rounded">
+                    <strong>Email para iniciar sesión:</strong><br/>
+                    {selectedEmployee.email}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="password">Contraseña</Label>
                     <Input
                       id="password"
                       value={loginForm.password}
                       onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Ingresa contraseña"
+                      placeholder="Mínimo 8 caracteres"
                       type="text"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Se generó una contraseña automáticamente. Puedes cambiarla si lo deseas.
+                    </p>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="employeeType">Tipo de Empleado</Label>
-                    <Select
-                      value={loginForm.employeeType}
-                      onValueChange={(value) => setLoginForm(prev => ({ ...prev, employeeType: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">Tipo A - Acceso Completo (Todo)</SelectItem>
-                        <SelectItem value="B">Tipo B - Acceso Limitado (Sin Pagos)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="text-sm text-muted-foreground bg-muted p-3 rounded">
-                    <strong>Niveles de Acceso:</strong><br/>
-                    <strong>Tipo A:</strong> Acceso completo a todas las funciones<br/>
-                    <strong>Tipo B:</strong> Acceso a todo excepto la sección de pagos
+
+                  <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded">
+                    <strong>Nivel de Acceso:</strong> {selectedEmployee.access_level || 'No definido'}<br/>
+                    <span className="text-xs">El nivel de acceso se define en el perfil del empleado.</span>
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2 mt-6">
                   <Button
                     onClick={handleCreateLogin}
-                    disabled={generatingLogin || !loginForm.username || !loginForm.password}
+                    disabled={generatingLogin || !loginForm.password || loginForm.password.length < 8}
                     className="flex-1"
                   >
                     {generatingLogin ? "Creando..." : "Crear Acceso"}

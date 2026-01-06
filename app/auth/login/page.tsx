@@ -20,7 +20,7 @@ export default function Page() {
   const router = useRouter()
 
   // Employee login states
-  const [employeeUsername, setEmployeeUsername] = useState("")
+  const [employeeEmail, setEmployeeEmail] = useState("")
   const [employeePassword, setEmployeePassword] = useState("")
   const [employeeError, setEmployeeError] = useState<string | null>(null)
   const [isEmployeeLoading, setIsEmployeeLoading] = useState(false)
@@ -82,13 +82,13 @@ export default function Page() {
     setEmployeeError(null)
 
     try {
-      const response = await fetch("/api/employee-auth", {
+      const response = await fetch("/api/auth/employee", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: employeeUsername,
+          email: employeeEmail,
           password: employeePassword,
         }),
       })
@@ -100,7 +100,7 @@ export default function Page() {
         localStorage.setItem("employeeSession", JSON.stringify(result.data))
         router.push("/")
       } else {
-        setEmployeeError(result.error || "Error de inicio de sesión")
+        setEmployeeError(result.error || "Credenciales inválidas")
       }
     } catch {
       setEmployeeError("Ocurrió un error durante el inicio de sesión")
@@ -183,14 +183,14 @@ export default function Page() {
               <TabsContent value="employee" className="space-y-4">
                 <form onSubmit={handleEmployeeLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="employee-username">Usuario</Label>
+                    <Label htmlFor="employee-email">Correo Electrónico</Label>
                     <Input
-                      id="employee-username"
-                      type="text"
-                      placeholder="Ingresa tu usuario"
+                      id="employee-email"
+                      type="email"
+                      placeholder="tucorreo@empresa.com"
                       required
-                      value={employeeUsername}
-                      onChange={(e) => setEmployeeUsername(e.target.value)}
+                      value={employeeEmail}
+                      onChange={(e) => setEmployeeEmail(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
@@ -213,7 +213,7 @@ export default function Page() {
                   </Button>
                 </form>
                 <div className="mt-6 text-center text-sm text-muted-foreground">
-                  Acceso de empleado con diferentes niveles de permisos
+                  Usa tu correo corporativo y la contraseña asignada
                 </div>
               </TabsContent>
             </Tabs>
