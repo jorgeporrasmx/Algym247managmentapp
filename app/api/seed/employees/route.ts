@@ -176,8 +176,15 @@ const INITIAL_EMPLOYEES = [
   }
 ]
 
-// Default password for initial employees (should be changed after first login)
-const DEFAULT_PASSWORD = "Algym247!"
+// Default password for initial employees - loaded from environment variable
+// Should be changed after first login
+function getDefaultPassword(): string {
+  const envPassword = process.env.DEFAULT_SEED_PASSWORD
+  if (!envPassword) {
+    throw new Error("DEFAULT_SEED_PASSWORD environment variable is required for seeding employees")
+  }
+  return envPassword
+}
 
 // POST /api/seed/employees - Seed initial employees
 export async function POST(request: NextRequest) {
@@ -239,7 +246,7 @@ export async function POST(request: NextRequest) {
 
         // Create login credentials if requested
         if (withCredentials && employee.id) {
-          const credResult = await authService.createCredentials(employee.id, DEFAULT_PASSWORD)
+          const credResult = await authService.createCredentials(employee.id, getDefaultPassword())
           if (credResult.success) {
             results.credentialsCreated.push(employeeData.employee_id)
           } else {
@@ -261,7 +268,7 @@ export async function POST(request: NextRequest) {
 
     // Log password only in development (never expose in response)
     if (withCredentials && process.env.NODE_ENV !== 'production') {
-      console.log("[Seed] Default password for seeded employees:", DEFAULT_PASSWORD)
+      console.log("[Seed] Default password for seeded employees: Check DEFAULT_SEED_PASSWORD env var")
     }
 
     return NextResponse.json({

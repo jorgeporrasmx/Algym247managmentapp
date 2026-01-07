@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { ProductsService, Product } from "@/lib/firebase/products-service"
+import { getAuthenticatedUser, requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Products list is public for POS functionality
+    // But we track if user is authenticated
+    const authResult = await getAuthenticatedUser(request)
+
     const productsService = ProductsService.getInstance()
     const { searchParams } = new URL(request.url)
 
@@ -43,8 +49,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication to create products
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const productsService = ProductsService.getInstance()
-    const body = await request.json()
+
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const {
       name,

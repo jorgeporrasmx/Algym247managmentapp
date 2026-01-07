@@ -2,9 +2,14 @@ import { type NextRequest, NextResponse } from "next/server"
 import { SchedulesService, Schedule } from "@/lib/firebase/schedules-service"
 import { BookingsService } from "@/lib/firebase/bookings-service"
 import { MembersService } from "@/lib/firebase/members-service"
+import { getAuthenticatedUser, requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Schedule is public for members to view available classes
+    const authResult = await getAuthenticatedUser(request)
+
     const schedulesService = SchedulesService.getInstance()
     const bookingsService = BookingsService.getInstance()
     const membersService = MembersService.getInstance()
@@ -81,8 +86,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication to create schedule items
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const schedulesService = SchedulesService.getInstance()
-    const body = await request.json()
+
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const {
       class_name,

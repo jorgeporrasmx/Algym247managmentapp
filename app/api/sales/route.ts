@@ -2,9 +2,21 @@ import { type NextRequest, NextResponse } from "next/server"
 import { SalesService, Sale, SaleItem } from "@/lib/firebase/sales-service"
 import { ProductsService } from "@/lib/firebase/products-service"
 import { MembersService } from "@/lib/firebase/members-service"
+import { getAuthenticatedUser, requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication to view sales
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const salesService = SalesService.getInstance()
     const membersService = MembersService.getInstance()
 
@@ -74,10 +86,28 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication to create sales
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const salesService = SalesService.getInstance()
     const productsService = ProductsService.getInstance()
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const {
       items,

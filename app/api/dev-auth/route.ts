@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server'
 
 // Development-only authentication endpoint
-// This simulates authentication without requiring Supabase
-const DEMO_USERS = {
-  'admin@demo.com': { password: 'admin123', role: 'admin', name: 'Demo Admin' },
-  'user@demo.com': { password: 'user123', role: 'user', name: 'Demo User' }
+// Credentials are loaded from environment variables for security
+function getDemoUsers() {
+  const adminPassword = process.env.DEV_DEMO_ADMIN_PASSWORD
+  const userPassword = process.env.DEV_DEMO_USER_PASSWORD
+
+  if (!adminPassword || !userPassword) {
+    return null
+  }
+
+  return {
+    'admin@demo.com': { password: adminPassword, role: 'admin', name: 'Demo Admin' },
+    'user@demo.com': { password: userPassword, role: 'user', name: 'Demo User' }
+  }
 }
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
-
     // Check if we're in development mode
     if (process.env.NODE_ENV === 'production') {
       return NextResponse.json(
@@ -19,9 +26,30 @@ export async function POST(request: Request) {
       )
     }
 
+    const DEMO_USERS = getDemoUsers()
+
+    if (!DEMO_USERS) {
+      return NextResponse.json(
+        { error: 'Demo credentials not configured. Set DEV_DEMO_ADMIN_PASSWORD and DEV_DEMO_USER_PASSWORD in .env' },
+        { status: 500 }
+      )
+    }
+
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      )
+    }
+
+    const { email, password } = body
+
     // Validate credentials
     const user = DEMO_USERS[email as keyof typeof DEMO_USERS]
-    
+
     if (!user || user.password !== password) {
       return NextResponse.json(
         { error: 'Invalid credentials' },

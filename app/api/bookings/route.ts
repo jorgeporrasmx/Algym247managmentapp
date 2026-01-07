@@ -2,9 +2,21 @@ import { type NextRequest, NextResponse } from "next/server"
 import { BookingsService, Booking } from "@/lib/firebase/bookings-service"
 import { SchedulesService } from "@/lib/firebase/schedules-service"
 import { MembersService } from "@/lib/firebase/members-service"
+import { requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication to view bookings
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const bookingsService = BookingsService.getInstance()
     const schedulesService = SchedulesService.getInstance()
     const membersService = MembersService.getInstance()
@@ -87,11 +99,29 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication to create bookings
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const bookingsService = BookingsService.getInstance()
     const schedulesService = SchedulesService.getInstance()
     const membersService = MembersService.getInstance()
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const { schedule_id, member_id, status = "confirmed", notes } = body
 

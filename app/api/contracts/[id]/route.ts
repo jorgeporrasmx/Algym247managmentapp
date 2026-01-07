@@ -1,9 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { ContractsService } from "@/lib/firebase/contracts-service"
 import { MembersService } from "@/lib/firebase/members-service"
+import { requireAnyPermission } from "@/lib/api-auth"
+import { Permission } from "@/lib/permissions"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Require authentication
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const { id } = await params
     const contractsService = ContractsService.getInstance()
     const membersService = MembersService.getInstance()
@@ -52,10 +64,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Require authentication
+    const authCheck = await requireAnyPermission(request, [
+      Permission.VIEW_ALL_MEMBERS,
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const { id } = await params
     const contractsService = ContractsService.getInstance()
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "Invalid JSON in request body"
+      }, { status: 400 })
+    }
 
     const contract = await contractsService.getContract(id)
 
@@ -83,6 +113,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Require higher permission to cancel contracts
+    const authCheck = await requireAnyPermission(request, [
+      Permission.MANAGE_ALL_EMPLOYEES
+    ])
+
+    if (!authCheck.authorized) {
+      return authCheck.response!
+    }
+
     const { id } = await params
     const contractsService = ContractsService.getInstance()
 
