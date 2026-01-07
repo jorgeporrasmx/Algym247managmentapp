@@ -5,6 +5,11 @@ import { PaymentsService } from "@/lib/firebase/payments-service"
 import { ProductsService } from "@/lib/firebase/products-service"
 import { SchedulesService } from "@/lib/firebase/schedules-service"
 import { BookingsService } from "@/lib/firebase/bookings-service"
+import {
+  strictRateLimiter,
+  getClientIdentifier,
+  rateLimitExceededResponse
+} from "@/lib/rate-limit"
 
 // Sample Members
 const SAMPLE_MEMBERS = [
@@ -332,6 +337,14 @@ function getNextWeekday(dayOfWeek: number, hours: number, minutes: number): Date
 // POST /api/seed/all - Seed all data
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - strict limit for dangerous seed operation
+    const clientId = getClientIdentifier(request)
+    const rateLimitResult = await strictRateLimiter.check(`seed:${clientId}`)
+
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult)
+    }
+
     // Security check
     const { searchParams } = new URL(request.url)
     const seedKey = searchParams.get("key")

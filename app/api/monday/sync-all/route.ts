@@ -5,6 +5,11 @@ import { EmployeesService } from "@/lib/firebase/employees-service"
 import { ContractsService } from "@/lib/firebase/contracts-service"
 import { requirePermission } from "@/lib/api-auth"
 import { Permission } from "@/lib/permissions"
+import {
+  strictRateLimiter,
+  getClientIdentifier,
+  rateLimitExceededResponse
+} from "@/lib/rate-limit"
 
 /**
  * POST /api/monday/sync-all
@@ -13,6 +18,14 @@ import { Permission } from "@/lib/permissions"
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - strict limit for bulk sync operation
+    const clientId = getClientIdentifier(request)
+    const rateLimitResult = await strictRateLimiter.check(`sync-all:${clientId}`)
+
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult)
+    }
+
     // Require high-level permission to sync
     const authCheck = await requirePermission(request, Permission.MANAGE_ALL_EMPLOYEES)
 
