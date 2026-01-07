@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  getCountFromServer,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -364,7 +365,7 @@ export class PaymentsService {
     return snapshot.docs.map(doc => this.docToPayment(doc))
   }
 
-  // Get payment statistics
+  // Get payment statistics using server-side aggregation for efficiency
   async getStats(period?: { start: Date; end: Date }): Promise<{
     total: number
     completed: number
@@ -373,28 +374,56 @@ export class PaymentsService {
     totalAmount: number
     completedAmount: number
   }> {
-    let q = query(collection(db, COLLECTION_NAME))
+    const collectionRef = collection(db, COLLECTION_NAME)
 
-    const snapshot = await getDocs(q)
-    let payments = snapshot.docs.map(doc => this.docToPayment(doc))
-
-    // Filter by period if provided
+    // If period is provided, we need to fetch documents for date filtering
+    // since Firestore requires composite indexes for complex date queries
     if (period) {
+      const snapshot = await getDocs(collectionRef)
+      let payments = snapshot.docs.map(doc => this.docToPayment(doc))
+
       payments = payments.filter(p => {
         const paymentDate = p.payment_date instanceof Date
           ? p.payment_date
           : new Date(p.payment_date as string)
         return paymentDate >= period.start && paymentDate <= period.end
       })
+
+      const completed = payments.filter(p => p.status === 'completed')
+
+      return {
+        total: payments.length,
+        completed: completed.length,
+        pending: payments.filter(p => p.status === 'pending').length,
+        failed: payments.filter(p => p.status === 'failed').length,
+        totalAmount: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
+        completedAmount: completed.reduce((sum, p) => sum + (p.amount || 0), 0)
+      }
     }
 
+    // Without period filter, use server-side aggregation for counts
+    const [
+      totalSnapshot,
+      completedSnapshot,
+      pendingSnapshot,
+      failedSnapshot
+    ] = await Promise.all([
+      getCountFromServer(collectionRef),
+      getCountFromServer(query(collectionRef, where('status', '==', 'completed'))),
+      getCountFromServer(query(collectionRef, where('status', '==', 'pending'))),
+      getCountFromServer(query(collectionRef, where('status', '==', 'failed')))
+    ])
+
+    // For amounts, we still need to fetch documents (Firestore Client SDK doesn't support sum aggregation)
+    const snapshot = await getDocs(collectionRef)
+    const payments = snapshot.docs.map(doc => this.docToPayment(doc))
     const completed = payments.filter(p => p.status === 'completed')
 
     return {
-      total: payments.length,
-      completed: completed.length,
-      pending: payments.filter(p => p.status === 'pending').length,
-      failed: payments.filter(p => p.status === 'failed').length,
+      total: totalSnapshot.data().count,
+      completed: completedSnapshot.data().count,
+      pending: pendingSnapshot.data().count,
+      failed: failedSnapshot.data().count,
       totalAmount: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
       completedAmount: completed.reduce((sum, p) => sum + (p.amount || 0), 0)
     }

@@ -11,9 +11,9 @@ import {
   orderBy,
   limit,
   startAfter,
+  getCountFromServer,
   DocumentData,
   QueryDocumentSnapshot,
-  Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from './config'
@@ -452,7 +452,7 @@ export class EmployeesService {
     }
   }
 
-  // Get statistics
+  // Get statistics using server-side aggregation for efficiency
   async getStats(): Promise<{
     total: number
     active: number
@@ -464,56 +464,53 @@ export class EmployeesService {
     byAccessLevel: Record<string, number>
   }> {
     try {
-      const stats = {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        pending: 0,
-        terminated: 0,
-        needingSync: 0,
-        byDepartment: {} as Record<string, number>,
-        byAccessLevel: {} as Record<string, number>
-      }
+      const collectionRef = collection(db, COLLECTION_NAME)
 
-      const querySnapshot = await getDocs(collection(db, COLLECTION_NAME))
+      // Use server-side aggregation for status counts (runs in parallel)
+      const [
+        totalSnapshot,
+        activeSnapshot,
+        inactiveSnapshot,
+        pendingSnapshot,
+        terminatedSnapshot,
+        needingSyncSnapshot
+      ] = await Promise.all([
+        getCountFromServer(collectionRef),
+        getCountFromServer(query(collectionRef, where('status', '==', 'active'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'inactive'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'pending'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'terminated'))),
+        getCountFromServer(query(collectionRef, where('sync_status', '==', 'pending')))
+      ])
 
+      // For grouping by department and access level, we need to fetch documents
+      // since Firestore doesn't support GROUP BY aggregations
+      const byDepartment: Record<string, number> = {}
+      const byAccessLevel: Record<string, number> = {}
+
+      const querySnapshot = await getDocs(collectionRef)
       querySnapshot.docs.forEach(doc => {
         const employee = doc.data() as Employee
-        stats.total++
 
-        // Count by status
-        switch (employee.status) {
-          case 'active':
-            stats.active++
-            break
-          case 'inactive':
-            stats.inactive++
-            break
-          case 'pending':
-            stats.pending++
-            break
-          case 'terminated':
-            stats.terminated++
-            break
-        }
-
-        // Count needing sync
-        if (employee.sync_status === 'pending') {
-          stats.needingSync++
-        }
-
-        // Count by department
         if (employee.department) {
-          stats.byDepartment[employee.department] = (stats.byDepartment[employee.department] || 0) + 1
+          byDepartment[employee.department] = (byDepartment[employee.department] || 0) + 1
         }
 
-        // Count by access level
         if (employee.access_level) {
-          stats.byAccessLevel[employee.access_level] = (stats.byAccessLevel[employee.access_level] || 0) + 1
+          byAccessLevel[employee.access_level] = (byAccessLevel[employee.access_level] || 0) + 1
         }
       })
 
-      return stats
+      return {
+        total: totalSnapshot.data().count,
+        active: activeSnapshot.data().count,
+        inactive: inactiveSnapshot.data().count,
+        pending: pendingSnapshot.data().count,
+        terminated: terminatedSnapshot.data().count,
+        needingSync: needingSyncSnapshot.data().count,
+        byDepartment,
+        byAccessLevel
+      }
     } catch (error) {
       console.error('Error getting stats:', error)
       throw error

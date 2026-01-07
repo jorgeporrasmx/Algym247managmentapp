@@ -1,16 +1,17 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
   limit,
   startAfter,
+  getCountFromServer,
   DocumentData,
   QueryDocumentSnapshot,
   Timestamp,
@@ -335,7 +336,7 @@ export class MembersService {
     }
   }
   
-  // Get statistics
+  // Get statistics using server-side aggregation for efficiency
   async getStats(): Promise<{
     total: number
     active: number
@@ -345,43 +346,33 @@ export class MembersService {
     needingSync: number
   }> {
     try {
-      const stats = {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        pending: 0,
-        suspended: 0,
-        needingSync: 0
+      const collectionRef = collection(db, COLLECTION_NAME)
+
+      // Use server-side aggregation for status counts (runs in parallel)
+      const [
+        totalSnapshot,
+        activeSnapshot,
+        inactiveSnapshot,
+        pendingSnapshot,
+        suspendedSnapshot,
+        needingSyncSnapshot
+      ] = await Promise.all([
+        getCountFromServer(collectionRef),
+        getCountFromServer(query(collectionRef, where('status', '==', 'active'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'inactive'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'pending'))),
+        getCountFromServer(query(collectionRef, where('status', '==', 'suspended'))),
+        getCountFromServer(query(collectionRef, where('sync_status', '==', 'pending')))
+      ])
+
+      return {
+        total: totalSnapshot.data().count,
+        active: activeSnapshot.data().count,
+        inactive: inactiveSnapshot.data().count,
+        pending: pendingSnapshot.data().count,
+        suspended: suspendedSnapshot.data().count,
+        needingSync: needingSyncSnapshot.data().count
       }
-      
-      // Get all members for stats (in production, use aggregation queries)
-      const querySnapshot = await getDocs(collection(db, COLLECTION_NAME))
-      
-      querySnapshot.docs.forEach(doc => {
-        const member = doc.data() as Member
-        stats.total++
-        
-        switch (member.status) {
-          case 'active':
-            stats.active++
-            break
-          case 'inactive':
-            stats.inactive++
-            break
-          case 'pending':
-            stats.pending++
-            break
-          case 'suspended':
-            stats.suspended++
-            break
-        }
-        
-        if (member.sync_status === 'pending') {
-          stats.needingSync++
-        }
-      })
-      
-      return stats
     } catch (error) {
       console.error('Error getting stats:', error)
       throw error

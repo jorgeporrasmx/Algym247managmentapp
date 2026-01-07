@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  getCountFromServer,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -329,7 +330,7 @@ export class ContractsService {
     return snapshot.docs.map(doc => this.docToContract(doc))
   }
 
-  // Get contract statistics
+  // Get contract statistics using server-side aggregation for efficiency
   async getStats(): Promise<{
     total: number
     active: number
@@ -338,23 +339,55 @@ export class ContractsService {
     pending: number
     expiringThisMonth: number
   }> {
-    const snapshot = await getDocs(collection(db, COLLECTION_NAME))
-    const contracts = snapshot.docs.map(doc => this.docToContract(doc))
-
+    const collectionRef = collection(db, COLLECTION_NAME)
     const now = new Date()
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
 
-    return {
-      total: contracts.length,
-      active: contracts.filter(c => c.status === 'active').length,
-      expired: contracts.filter(c => c.status === 'expired').length,
-      cancelled: contracts.filter(c => c.status === 'cancelled').length,
-      pending: contracts.filter(c => c.status === 'pending').length,
-      expiringThisMonth: contracts.filter(c => {
-        if (c.status !== 'active') return false
-        const endDate = c.end_date instanceof Date ? c.end_date : new Date(c.end_date as string)
+    // Use server-side aggregation for status counts (runs in parallel)
+    const [
+      totalSnapshot,
+      activeSnapshot,
+      expiredSnapshot,
+      cancelledSnapshot,
+      pendingSnapshot
+    ] = await Promise.all([
+      getCountFromServer(collectionRef),
+      getCountFromServer(query(collectionRef, where('status', '==', 'active'))),
+      getCountFromServer(query(collectionRef, where('status', '==', 'expired'))),
+      getCountFromServer(query(collectionRef, where('status', '==', 'cancelled'))),
+      getCountFromServer(query(collectionRef, where('status', '==', 'pending')))
+    ])
+
+    // For expiringThisMonth, we need to query with date range
+    // This requires a composite index on status + end_date
+    let expiringThisMonth = 0
+    try {
+      const expiringQuery = query(
+        collectionRef,
+        where('status', '==', 'active'),
+        where('end_date', '>=', Timestamp.fromDate(now)),
+        where('end_date', '<=', Timestamp.fromDate(endOfMonth))
+      )
+      const expiringSnapshot = await getCountFromServer(expiringQuery)
+      expiringThisMonth = expiringSnapshot.data().count
+    } catch {
+      // Fallback if composite index doesn't exist - fetch active contracts only
+      const activeQuery = query(collectionRef, where('status', '==', 'active'))
+      const activeDocsSnapshot = await getDocs(activeQuery)
+      expiringThisMonth = activeDocsSnapshot.docs.filter(doc => {
+        const data = doc.data()
+        const endDate = data.end_date?.toDate?.() || new Date(data.end_date)
         return endDate >= now && endDate <= endOfMonth
       }).length
+    }
+
+    return {
+      total: totalSnapshot.data().count,
+      active: activeSnapshot.data().count,
+      expired: expiredSnapshot.data().count,
+      cancelled: cancelledSnapshot.data().count,
+      pending: pendingSnapshot.data().count,
+      expiringThisMonth
     }
   }
 }
