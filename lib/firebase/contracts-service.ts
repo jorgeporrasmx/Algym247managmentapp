@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -310,7 +311,7 @@ export class ContractsService {
 
     await updateDoc(docRef, {
       sync_status: status,
-      sync_error: error || null,
+      sync_error: error || deleteField(),
       last_synced_at: serverTimestamp(),
       updated_at: serverTimestamp()
     })

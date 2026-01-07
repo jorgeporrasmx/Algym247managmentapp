@@ -260,13 +260,17 @@ export class MembersService {
     try {
       let q = query(collection(db, COLLECTION_NAME))
       
+      // Apply all provided criteria (not mutually exclusive)
       if (criteria.email) {
         q = query(q, where('email', '==', criteria.email.toLowerCase()))
-      } else if (criteria.phone) {
+      }
+      if (criteria.phone) {
         q = query(q, where('primary_phone', '==', criteria.phone))
-      } else if (criteria.member_id) {
+      }
+      if (criteria.member_id) {
         q = query(q, where('member_id', '==', criteria.member_id))
-      } else if (criteria.monday_item_id) {
+      }
+      if (criteria.monday_item_id) {
         q = query(q, where('monday_item_id', '==', criteria.monday_item_id))
       }
       

@@ -6,6 +6,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -381,7 +382,7 @@ export class ProductsService {
 
     await updateDoc(docRef, {
       sync_status: status,
-      sync_error: error || null,
+      sync_error: error || deleteField(),
       last_synced_at: serverTimestamp(),
       updated_at: serverTimestamp()
     })
