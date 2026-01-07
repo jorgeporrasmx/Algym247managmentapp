@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,6 +21,7 @@ interface Member {
 }
 
 export default function AddContractPage() {
+  const router = useRouter()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -66,23 +69,15 @@ export default function AddContractPage() {
       })
 
       if (response.ok) {
-        alert("Contract created successfully!")
-        setFormData({
-          member_id: "",
-          contract_type: "",
-          start_date: "",
-          end_date: "",
-          monthly_fee: "",
-          status: "active",
-          notes: ""
-        })
+        toast.success("Contrato creado exitosamente")
+        router.push("/contracts")
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        toast.error(`Error: ${error.error}`)
       }
     } catch (error) {
       console.error("Error creating contract:", error)
-      alert("Error creating contract")
+      toast.error("Error al crear contrato")
     } finally {
       setSubmitting(false)
     }

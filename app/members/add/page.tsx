@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,6 +13,7 @@ import { Plus, User, Phone, MapPin, FileText, CreditCard } from "lucide-react"
 import Link from "next/link"
 
 export default function AddMemberPage() {
+  const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     // Basic Information
@@ -75,45 +78,15 @@ export default function AddMemberPage() {
       })
 
       if (response.ok) {
-        alert("Member created successfully!")
-        // Reset form
-        setFormData({
-          name: "",
-          person: "",
-          status: "active",
-          start_date: "",
-          paternal_last_name: "",
-          maternal_last_name: "",
-          first_name: "",
-          date_of_birth: "",
-          email: "",
-          primary_phone: "",
-          address_1: "",
-          access_type: "",
-          city: "",
-          state: "",
-          zip_code: "",
-          secondary_phone: "",
-          emergency_contact_name: "",
-          emergency_contact_phone: "",
-          referred_member: "",
-          selected_plan: "",
-          employee: "",
-          member_id: "",
-          monthly_amount: "",
-          expiration_date: "",
-          direct_debit: "No domiciliado",
-          how_did_you_hear: "",
-          contract_link: "",
-          version: "1.0"
-        })
+        toast.success("Miembro creado exitosamente")
+        router.push("/members")
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        toast.error(`Error: ${error.error}`)
       }
     } catch (error) {
       console.error("Error creating member:", error)
-      alert("Error creating member")
+      toast.error("Error al crear miembro")
     } finally {
       setSubmitting(false)
     }

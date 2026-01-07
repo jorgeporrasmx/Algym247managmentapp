@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,6 +13,7 @@ import Link from "next/link"
 import { Plus, Package } from "lucide-react"
 
 export default function AddProductPage() {
+  const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -46,31 +49,15 @@ export default function AddProductPage() {
         }),
       })
       if (res.ok) {
-        alert("Product created successfully!")
-        setFormData({
-          name: "",
-          product_id: "",
-          brand: "",
-          type: "",
-          category: "",
-          supplier: "",
-          supplier_email: "",
-          supplier_website: "",
-          gym: "",
-          price: "0",
-          cost: "0",
-          quantity: "0",
-          stock: "0",
-          payment_method: "",
-          sale_status: "registrado",
-        })
+        toast.success("Producto creado exitosamente")
+        router.push("/products")
       } else {
         const err = await res.json()
-        alert(`Error: ${err.error}`)
+        toast.error(`Error: ${err.error}`)
       }
     } catch (err) {
       console.error("Error creating product", err)
-      alert("Error creating product")
+      toast.error("Error al crear producto")
     } finally {
       setSubmitting(false)
     }

@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,6 +14,7 @@ import { Plus, User, Phone, MapPin, FileText, Briefcase } from "lucide-react"
 import Link from "next/link"
 
 export default function AddEmployeePage() {
+  const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     // Basic Information
@@ -75,44 +78,15 @@ export default function AddEmployeePage() {
       })
 
       if (response.ok) {
-        alert("Employee created successfully!")
-        // Reset form
-        setFormData({
-          name: "",
-          position: "",
-          status: "active",
-          hire_date: "",
-          paternal_last_name: "",
-          maternal_last_name: "",
-          first_name: "",
-          date_of_birth: "",
-          email: "",
-          primary_phone: "",
-          address_1: "",
-          city: "",
-          state: "",
-          zip_code: "",
-          secondary_phone: "",
-          emergency_contact_name: "",
-          emergency_contact_phone: "",
-          department: "",
-          employee_id: "",
-          salary: "",
-          access_level: "",
-          manager: "",
-          work_schedule: "",
-          skills: "",
-          certifications: "",
-          notes: "",
-          version: "1.0"
-        })
+        toast.success("Empleado creado exitosamente")
+        router.push("/employees")
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        toast.error(`Error: ${error.error}`)
       }
     } catch (error) {
       console.error("Error creating employee:", error)
-      alert("Error creating employee")
+      toast.error("Error al crear empleado")
     } finally {
       setSubmitting(false)
     }

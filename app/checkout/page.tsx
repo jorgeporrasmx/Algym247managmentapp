@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AuthenticatedLayout } from "@/components/authenticated-layout"
 import { useCart } from "@/components/cart-provider"
 import { useRouter } from "next/navigation"
-import { 
-  ShoppingCart, CreditCard, DollarSign, Banknote, 
+import {
+  ShoppingCart, CreditCard, DollarSign, Banknote,
   User, Mail, Phone, MapPin, CheckCircle
 } from "lucide-react"
 
@@ -70,11 +71,11 @@ export default function CheckoutPage() {
         router.push(`/checkout/success?order=${result.id}`)
       } else {
         const error = await response.json()
-        alert(`Error al procesar el pago: ${error.message}`)
+        toast.error(`Error al procesar el pago: ${error.message}`)
       }
     } catch (error) {
       console.error("Error processing checkout:", error)
-      alert("Error al procesar el pago")
+      toast.error("Error al procesar el pago")
     } finally {
       setProcessing(false)
     }
