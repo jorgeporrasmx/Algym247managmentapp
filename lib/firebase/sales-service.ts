@@ -10,6 +10,9 @@ import {
   orderBy,
   limit,
   getCountFromServer,
+  DocumentData,
+  QueryDocumentSnapshot,
+  DocumentSnapshot,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -104,14 +107,17 @@ export class SalesService {
   }
 
   // Convert Firestore document to Sale
-  private docToSale(doc: any): Sale {
+  private docToSale(doc: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>): Sale {
     const data = doc.data()
+    if (!data) {
+      throw new Error('Document data is undefined')
+    }
     return {
       id: doc.id,
       ...data,
       created_at: data.created_at?.toDate?.() || data.created_at,
       updated_at: data.updated_at?.toDate?.() || data.updated_at
-    }
+    } as Sale
   }
 
   // Create a new sale
@@ -383,77 +389,82 @@ export class SalesService {
     salesByPaymentMethod: Record<string, { count: number; amount: number }>
     salesByType: Record<string, { count: number; amount: number }>
   }> {
-    const collectionRef = collection(db, COLLECTION_NAME)
+    try {
+      const collectionRef = collection(db, COLLECTION_NAME)
 
-    // For groupings and sums, we need to fetch documents
-    // but we can optimize counts when no period is specified
-    const snapshot = await getDocs(collectionRef)
-    let sales = snapshot.docs.map(doc => this.docToSale(doc))
+      // For groupings and sums, we need to fetch documents
+      // but we can optimize counts when no period is specified
+      const snapshot = await getDocs(collectionRef)
+      let sales = snapshot.docs.map(doc => this.docToSale(doc))
 
-    // Filter by period if provided
-    if (period) {
-      sales = sales.filter(s => {
-        const saleDate = s.created_at instanceof Date
-          ? s.created_at
-          : new Date(s.created_at as string)
-        return saleDate >= period.start && saleDate <= period.end
+      // Filter by period if provided
+      if (period) {
+        sales = sales.filter(s => {
+          const saleDate = s.created_at instanceof Date
+            ? s.created_at
+            : new Date(s.created_at as string)
+          return saleDate >= period.start && saleDate <= period.end
+        })
+      }
+
+      const completedSales = sales.filter(s => s.payment_status === 'completed')
+      const totalRevenue = completedSales.reduce((sum, s) => sum + s.total_amount, 0)
+
+      // Use server-side counts when no period filter (runs in parallel)
+      let totalCount: number
+      let pendingCount: number
+      let refundedCount: number
+
+      if (!period) {
+        const [totalSnapshot, pendingSnapshot, refundedSnapshot] = await Promise.all([
+          getCountFromServer(collectionRef),
+          getCountFromServer(query(collectionRef, where('payment_status', '==', 'pending'))),
+          getCountFromServer(query(collectionRef, where('payment_status', '==', 'refunded')))
+        ])
+        totalCount = totalSnapshot.data().count
+        pendingCount = pendingSnapshot.data().count
+        refundedCount = refundedSnapshot.data().count
+      } else {
+        totalCount = sales.length
+        pendingCount = sales.filter(s => s.payment_status === 'pending').length
+        refundedCount = sales.filter(s => s.payment_status === 'refunded').length
+      }
+
+      // Group by payment method
+      const salesByPaymentMethod: Record<string, { count: number; amount: number }> = {}
+      completedSales.forEach(s => {
+        const method = s.payment_method || 'unknown'
+        if (!salesByPaymentMethod[method]) {
+          salesByPaymentMethod[method] = { count: 0, amount: 0 }
+        }
+        salesByPaymentMethod[method].count++
+        salesByPaymentMethod[method].amount += s.total_amount
       })
-    }
 
-    const completedSales = sales.filter(s => s.payment_status === 'completed')
-    const totalRevenue = completedSales.reduce((sum, s) => sum + s.total_amount, 0)
+      // Group by sale type
+      const salesByType: Record<string, { count: number; amount: number }> = {}
+      completedSales.forEach(s => {
+        const type = s.sale_type || 'product'
+        if (!salesByType[type]) {
+          salesByType[type] = { count: 0, amount: 0 }
+        }
+        salesByType[type].count++
+        salesByType[type].amount += s.total_amount
+      })
 
-    // Use server-side counts when no period filter (runs in parallel)
-    let totalCount: number
-    let pendingCount: number
-    let refundedCount: number
-
-    if (!period) {
-      const [totalSnapshot, pendingSnapshot, refundedSnapshot] = await Promise.all([
-        getCountFromServer(collectionRef),
-        getCountFromServer(query(collectionRef, where('payment_status', '==', 'pending'))),
-        getCountFromServer(query(collectionRef, where('payment_status', '==', 'refunded')))
-      ])
-      totalCount = totalSnapshot.data().count
-      pendingCount = pendingSnapshot.data().count
-      refundedCount = refundedSnapshot.data().count
-    } else {
-      totalCount = sales.length
-      pendingCount = sales.filter(s => s.payment_status === 'pending').length
-      refundedCount = sales.filter(s => s.payment_status === 'refunded').length
-    }
-
-    // Group by payment method
-    const salesByPaymentMethod: Record<string, { count: number; amount: number }> = {}
-    completedSales.forEach(s => {
-      const method = s.payment_method || 'unknown'
-      if (!salesByPaymentMethod[method]) {
-        salesByPaymentMethod[method] = { count: 0, amount: 0 }
+      return {
+        totalSales: totalCount,
+        totalRevenue,
+        completedSales: completedSales.length,
+        pendingSales: pendingCount,
+        refundedSales: refundedCount,
+        averageTicket: completedSales.length > 0 ? totalRevenue / completedSales.length : 0,
+        salesByPaymentMethod,
+        salesByType
       }
-      salesByPaymentMethod[method].count++
-      salesByPaymentMethod[method].amount += s.total_amount
-    })
-
-    // Group by sale type
-    const salesByType: Record<string, { count: number; amount: number }> = {}
-    completedSales.forEach(s => {
-      const type = s.sale_type || 'product'
-      if (!salesByType[type]) {
-        salesByType[type] = { count: 0, amount: 0 }
-      }
-      salesByType[type].count++
-      salesByType[type].amount += s.total_amount
-    })
-
-    return {
-      totalSales: totalCount,
-      totalRevenue,
-      completedSales: completedSales.length,
-      pendingSales: pendingCount,
-      refundedSales: refundedCount,
-      averageTicket: completedSales.length > 0 ? totalRevenue / completedSales.length : 0,
-      salesByPaymentMethod,
-      salesByType
+    } catch (error) {
+      console.error('[SalesService] Error getting stats:', error)
+      throw error
     }
   }
 

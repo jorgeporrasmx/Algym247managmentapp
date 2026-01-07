@@ -11,6 +11,9 @@ import {
   where,
   orderBy,
   limit,
+  DocumentData,
+  QueryDocumentSnapshot,
+  DocumentSnapshot,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -88,15 +91,18 @@ export class ProductsService {
   }
 
   // Convert Firestore document to Product
-  private docToProduct(doc: any): Product {
+  private docToProduct(doc: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>): Product {
     const data = doc.data()
+    if (!data) {
+      throw new Error('Document data is undefined')
+    }
     return {
       id: doc.id,
       ...data,
       created_at: data.created_at?.toDate?.() || data.created_at,
       updated_at: data.updated_at?.toDate?.() || data.updated_at,
       last_synced_at: data.last_synced_at?.toDate?.() || data.last_synced_at
-    }
+    } as Product
   }
 
   // Create a new product
@@ -410,19 +416,24 @@ export class ProductsService {
     totalValue: number
     categories: number
   }> {
-    const snapshot = await getDocs(collection(db, COLLECTION_NAME))
-    const products = snapshot.docs.map(doc => this.docToProduct(doc))
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTION_NAME))
+      const products = snapshot.docs.map(doc => this.docToProduct(doc))
 
-    const categories = [...new Set(products.map(p => p.category).filter(Boolean))]
+      const categories = [...new Set(products.map(p => p.category).filter(Boolean))]
 
-    return {
-      total: products.length,
-      active: products.filter(p => p.status === 'active').length,
-      outOfStock: products.filter(p => p.status === 'out_of_stock').length,
-      lowStock: products.filter(p => p.stock <= p.stock_minimum && p.status !== 'discontinued').length,
-      discontinued: products.filter(p => p.status === 'discontinued').length,
-      totalValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0),
-      categories: categories.length
+      return {
+        total: products.length,
+        active: products.filter(p => p.status === 'active').length,
+        outOfStock: products.filter(p => p.status === 'out_of_stock').length,
+        lowStock: products.filter(p => p.stock <= p.stock_minimum && p.status !== 'discontinued').length,
+        discontinued: products.filter(p => p.status === 'discontinued').length,
+        totalValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0),
+        categories: categories.length
+      }
+    } catch (error) {
+      console.error('[ProductsService] Error getting stats:', error)
+      throw error
     }
   }
 }

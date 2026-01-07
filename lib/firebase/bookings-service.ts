@@ -10,6 +10,9 @@ import {
   where,
   orderBy,
   limit,
+  DocumentData,
+  QueryDocumentSnapshot,
+  DocumentSnapshot,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -79,15 +82,18 @@ export class BookingsService {
   }
 
   // Convert Firestore document to Booking
-  private docToBooking(doc: any): Booking {
+  private docToBooking(doc: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>): Booking {
     const data = doc.data()
+    if (!data) {
+      throw new Error('Document data is undefined')
+    }
     return {
       id: doc.id,
       ...data,
       booking_date: data.booking_date?.toDate?.() || data.booking_date,
       created_at: data.created_at?.toDate?.() || data.created_at,
       updated_at: data.updated_at?.toDate?.() || data.updated_at
-    }
+    } as Booking
   }
 
   // Create a new booking

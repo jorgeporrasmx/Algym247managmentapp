@@ -11,6 +11,9 @@ import {
   where,
   orderBy,
   limit,
+  DocumentData,
+  QueryDocumentSnapshot,
+  DocumentSnapshot,
   Timestamp,
   serverTimestamp
 } from 'firebase/firestore'
@@ -87,8 +90,11 @@ export class SchedulesService {
   }
 
   // Convert Firestore document to Schedule
-  private docToSchedule(doc: any): Schedule {
+  private docToSchedule(doc: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>): Schedule {
     const data = doc.data()
+    if (!data) {
+      throw new Error('Document data is undefined')
+    }
     return {
       id: doc.id,
       ...data,
@@ -97,7 +103,7 @@ export class SchedulesService {
       created_at: data.created_at?.toDate?.() || data.created_at,
       updated_at: data.updated_at?.toDate?.() || data.updated_at,
       last_synced_at: data.last_synced_at?.toDate?.() || data.last_synced_at
-    }
+    } as Schedule
   }
 
   // Create a new schedule item
