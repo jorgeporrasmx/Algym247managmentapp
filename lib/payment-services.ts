@@ -1,7 +1,19 @@
 /**
- * Payment Services - Stub implementations for Sprint 1
- * These will be replaced with real Fiserv integration in Sprint 4
+ * Payment Services
+ * Payment gateway integration with Fiserv
  */
+
+import { createHmac, timingSafeEqual } from 'crypto'
+
+// Get Fiserv webhook secret from environment
+function getFiservWebhookSecret(): string {
+  return process.env.FISERV_WEBHOOK_SECRET || ''
+}
+
+// Check if Fiserv webhook verification is enabled
+function isFiservVerificationEnabled(): boolean {
+  return !!process.env.FISERV_WEBHOOK_SECRET
+}
 
 export interface PaymentLinkRequest {
   memberId: string
@@ -107,21 +119,54 @@ export async function markPaymentPaid(update: PaymentStatusUpdate): Promise<{ su
 }
 
 /**
- * Validate webhook signature (stub implementation)
- * In Sprint 4, this will validate the real Fiserv webhook signature
+ * Validate Fiserv webhook signature
+ * Fiserv uses HMAC-SHA256 for webhook signatures
+ *
+ * @param payload - Raw request body as string
+ * @param signature - Signature from x-fiserv-signature header
+ * @returns Promise<boolean> - True if signature is valid
  */
 export async function validateWebhookSignature(payload: string, signature: string): Promise<boolean> {
   try {
-    // Stub implementation - always returns true for testing
-    // In real implementation, this would validate the Fiserv webhook signature
-    console.log('[STUB] Validating webhook signature:', { signature: signature.substring(0, 20) + '...' })
-    
-    // Simulate validation delay
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    return true
+    // Check if verification is enabled
+    if (!isFiservVerificationEnabled()) {
+      console.warn('[Fiserv Webhook] Signature verification is disabled. Set FISERV_WEBHOOK_SECRET to enable.')
+      return true // Allow webhooks when verification is disabled (development mode)
+    }
+
+    if (!signature) {
+      console.error('[Fiserv Webhook] Missing webhook signature')
+      return false
+    }
+
+    const secret = getFiservWebhookSecret()
+
+    // Fiserv uses HMAC-SHA256 for webhook signatures
+    const expectedSignature = createHmac('sha256', secret)
+      .update(payload)
+      .digest('hex')
+
+    // Use timing-safe comparison to prevent timing attacks
+    const signatureBuffer = Buffer.from(signature)
+    const expectedBuffer = Buffer.from(expectedSignature)
+
+    // Check length first (timing-safe comparison requires equal lengths)
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      console.error('[Fiserv Webhook] Signature length mismatch')
+      return false
+    }
+
+    const isValid = timingSafeEqual(signatureBuffer, expectedBuffer)
+
+    if (!isValid) {
+      console.error('[Fiserv Webhook] Signature verification failed')
+    } else {
+      console.log('[Fiserv Webhook] Signature verified successfully')
+    }
+
+    return isValid
   } catch (error) {
-    console.error('[STUB] Error validating webhook signature:', error)
+    console.error('[Fiserv Webhook] Error validating webhook signature:', error)
     return false
   }
 }

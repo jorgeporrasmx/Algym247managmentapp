@@ -2,6 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { MondayAPIService } from "@/lib/monday-api"
+import {
+  verifyMondayWebhookSignature,
+  handleMondayChallenge,
+  extractMondaySignature
+} from "@/lib/monday/webhook-auth"
+import { getMondayBoardIds } from "@/lib/monday/config"
 
 interface MondayWebhookPayload {
   type: "create_pulse" | "update_column_value"
@@ -128,7 +134,30 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const payload: MondayWebhookPayload = await request.json()
+    // Get raw body for signature verification
+    const rawBody = await request.text()
+
+    // Extract signature from headers
+    const signature = extractMondaySignature(request.headers)
+
+    // Verify webhook signature
+    const verification = verifyMondayWebhookSignature(rawBody, signature)
+    if (!verification.valid && !verification.skipped) {
+      console.error("[Monday Webhook] Signature verification failed:", verification.error)
+      return NextResponse.json(
+        { success: false, error: verification.error },
+        { status: 401 }
+      )
+    }
+
+    // Parse the payload
+    const payload: MondayWebhookPayload = JSON.parse(rawBody)
+
+    // Handle Monday challenge (used when setting up webhooks)
+    const challengeResponse = handleMondayChallenge(payload)
+    if (challengeResponse) {
+      return NextResponse.json(challengeResponse)
+    }
 
     console.log("[Monday Webhook] Received:", JSON.stringify(payload, null, 2))
 
@@ -144,27 +173,30 @@ export async function POST(request: NextRequest) {
       console.error("[Monday Webhook] Failed to log webhook:", logError)
     }
 
-    // Handle different board types
-    const PRODUCTS_BOARD_ID = 9944534259 // Your actual products board
-    const MEMBERS_BOARD_ID = 123456789   // Replace with actual member board ID
-    const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
+    // Handle different board types using centralized configuration
+    const boardIds = getMondayBoardIds()
+    const PRODUCTS_BOARD_ID = boardIds.inventory ? parseInt(boardIds.inventory) : 0
+    const MEMBERS_BOARD_ID = boardIds.members ? parseInt(boardIds.members) : 0
+    const CONTRACTS_BOARD_ID = boardIds.contracts ? parseInt(boardIds.contracts) : 0
 
-    if (payload.boardId === PRODUCTS_BOARD_ID) {
+    if (PRODUCTS_BOARD_ID && payload.boardId === PRODUCTS_BOARD_ID) {
       await handleProductChanges(payload)
-    } else if (payload.boardId === MEMBERS_BOARD_ID) {
+    } else if (MEMBERS_BOARD_ID && payload.boardId === MEMBERS_BOARD_ID) {
       const supabase = await createClient()
       if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload)
+        await handlePulseCreation(supabase, payload, 'members')
       } else if (payload.type === "update_column_value") {
         await handleMemberColumnUpdate(supabase, payload)
       }
-    } else if (payload.boardId === CONTRACTS_BOARD_ID) {
+    } else if (CONTRACTS_BOARD_ID && payload.boardId === CONTRACTS_BOARD_ID) {
       const supabase = await createClient()
       if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload)
+        await handlePulseCreation(supabase, payload, 'contracts')
       } else if (payload.type === "update_column_value") {
         await handleContractColumnUpdate(supabase, payload)
       }
+    } else {
+      console.log("[Monday Webhook] Received webhook for unrecognized board:", payload.boardId)
     }
 
     return NextResponse.json({ success: true, message: "Webhook processed successfully" })
@@ -187,14 +219,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handlePulseCreation(supabase: SupabaseClient, payload: MondayWebhookPayload) {
-  console.log("[v0] Handling pulse creation for:", payload.pulseName)
+async function handlePulseCreation(
+  supabase: SupabaseClient,
+  payload: MondayWebhookPayload,
+  entityType: 'members' | 'contracts'
+) {
+  console.log(`[Monday Webhook] Handling pulse creation for ${entityType}:`, payload.pulseName)
 
-  // You'll need to configure these board IDs based on your Monday.com setup
-  const MEMBERS_BOARD_ID = 123456789 // Replace with actual member board ID
-  const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
-
-  if (payload.boardId === MEMBERS_BOARD_ID) {
+  if (entityType === 'members') {
     const { error } = await supabase.from("members").insert({
       monday_member_id: payload.pulseId.toString(),
       name: payload.pulseName,
@@ -202,12 +234,12 @@ async function handlePulseCreation(supabase: SupabaseClient, payload: MondayWebh
     })
 
     if (error) {
-      console.error("[v0] Error creating member:", error)
+      console.error("[Monday Webhook] Error creating member:", error)
       throw error
     }
 
-    console.log("[v0] Created new member:", payload.pulseName)
-  } else if (payload.boardId === CONTRACTS_BOARD_ID) {
+    console.log("[Monday Webhook] Created new member:", payload.pulseName)
+  } else if (entityType === 'contracts') {
     const { error } = await supabase.from("contracts").insert({
       monday_contract_id: payload.pulseId.toString(),
       contract_type: payload.pulseName,
@@ -215,26 +247,16 @@ async function handlePulseCreation(supabase: SupabaseClient, payload: MondayWebh
     })
 
     if (error) {
-      console.error("[v0] Error creating contract:", error)
+      console.error("[Monday Webhook] Error creating contract:", error)
       throw error
     }
 
-    console.log("[v0] Created new contract:", payload.pulseName)
+    console.log("[Monday Webhook] Created new contract:", payload.pulseName)
   }
 }
 
-async function handleColumnUpdate(supabase: SupabaseClient, payload: MondayWebhookPayload) {
-  console.log("[v0] Handling column update for pulse:", payload.pulseId)
-
-  const MEMBERS_BOARD_ID = 123456789 // Replace with actual member board ID
-  const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
-
-  if (payload.boardId === MEMBERS_BOARD_ID) {
-    await handleMemberColumnUpdate(supabase, payload)
-  } else if (payload.boardId === CONTRACTS_BOARD_ID) {
-    await handleContractColumnUpdate(supabase, payload)
-  }
-}
+// Note: handleColumnUpdate is now handled directly in the POST handler
+// using the centralized board configuration
 
 async function handleMemberColumnUpdate(supabase: SupabaseClient, payload: MondayWebhookPayload) {
   const mondayMemberId = payload.pulseId.toString()
