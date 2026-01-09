@@ -8,6 +8,7 @@ import {
   extractMondaySignature
 } from "@/lib/monday/webhook-auth"
 import { getMondayBoardIds } from "@/lib/monday/config"
+import MondaySyncManager, { EntityType } from "@/lib/monday/sync-manager"
 
 interface MondayWebhookPayload {
   type: "create_pulse" | "update_column_value"
@@ -178,23 +179,40 @@ export async function POST(request: NextRequest) {
     const PRODUCTS_BOARD_ID = boardIds.inventory ? parseInt(boardIds.inventory) : 0
     const MEMBERS_BOARD_ID = boardIds.members ? parseInt(boardIds.members) : 0
     const CONTRACTS_BOARD_ID = boardIds.contracts ? parseInt(boardIds.contracts) : 0
+    const PAYMENTS_BOARD_ID = boardIds.payments ? parseInt(boardIds.payments) : 0
+    const EMPLOYEES_BOARD_ID = boardIds.employees ? parseInt(boardIds.employees) : 0
+
+    // Determine entity type based on board
+    let entityType: EntityType | null = null
+    if (MEMBERS_BOARD_ID && payload.boardId === MEMBERS_BOARD_ID) {
+      entityType = 'members'
+    } else if (CONTRACTS_BOARD_ID && payload.boardId === CONTRACTS_BOARD_ID) {
+      entityType = 'contracts'
+    } else if (PAYMENTS_BOARD_ID && payload.boardId === PAYMENTS_BOARD_ID) {
+      entityType = 'payments'
+    } else if (EMPLOYEES_BOARD_ID && payload.boardId === EMPLOYEES_BOARD_ID) {
+      entityType = 'employees'
+    }
 
     if (PRODUCTS_BOARD_ID && payload.boardId === PRODUCTS_BOARD_ID) {
+      // Handle product/inventory changes (cache invalidation)
       await handleProductChanges(payload)
-    } else if (MEMBERS_BOARD_ID && payload.boardId === MEMBERS_BOARD_ID) {
-      const supabase = await createClient()
-      if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload, 'members')
-      } else if (payload.type === "update_column_value") {
-        await handleMemberColumnUpdate(supabase, payload)
-      }
-    } else if (CONTRACTS_BOARD_ID && payload.boardId === CONTRACTS_BOARD_ID) {
-      const supabase = await createClient()
-      if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload, 'contracts')
-      } else if (payload.type === "update_column_value") {
-        await handleContractColumnUpdate(supabase, payload)
-      }
+    } else if (entityType) {
+      // Use the sync manager for all entity types
+      const eventType = payload.type === "create_pulse" ? "create_item" : "change_column_value"
+
+      const syncResult = await MondaySyncManager.handleMondayWebhook({
+        event: {
+          type: eventType,
+          itemId: payload.pulseId.toString(),
+          boardId: payload.boardId.toString(),
+          columnId: payload.columnId,
+          value: payload.value
+        },
+        entityType
+      })
+
+      console.log(`[Monday Webhook] Sync result for ${entityType}:`, syncResult)
     } else {
       console.log("[Monday Webhook] Received webhook for unrecognized board:", payload.boardId)
     }
