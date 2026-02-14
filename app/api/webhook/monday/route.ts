@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/server"
 import { SupabaseClient } from "@supabase/supabase-js"
-import { MondayAPIService } from "@/lib/monday-api"
+// MondayAPIService available for future use if needed
 
 interface MondayWebhookPayload {
   type: "create_pulse" | "update_column_value"
@@ -146,8 +146,8 @@ export async function POST(request: NextRequest) {
 
     // Handle different board types
     const PRODUCTS_BOARD_ID = 9944534259 // Your actual products board
-    const MEMBERS_BOARD_ID = 123456789   // Replace with actual member board ID
-    const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
+    const MEMBERS_BOARD_ID = 18092113859   // Al Gym members board
+    const CONTRACTS_BOARD_ID = 18092113859 // Al Gym contracts board (same board)
 
     if (payload.boardId === PRODUCTS_BOARD_ID) {
       await handleProductChanges(payload)
@@ -190,9 +190,9 @@ export async function POST(request: NextRequest) {
 async function handlePulseCreation(supabase: SupabaseClient, payload: MondayWebhookPayload) {
   console.log("[v0] Handling pulse creation for:", payload.pulseName)
 
-  // You'll need to configure these board IDs based on your Monday.com setup
-  const MEMBERS_BOARD_ID = 123456789 // Replace with actual member board ID
-  const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
+  // Al Gym Monday.com board IDs
+  const MEMBERS_BOARD_ID = 18092113859 // Al Gym members board
+  const CONTRACTS_BOARD_ID = 18092113859 // Al Gym contracts board (same board)
 
   if (payload.boardId === MEMBERS_BOARD_ID) {
     const { error } = await supabase.from("members").insert({
@@ -223,35 +223,34 @@ async function handlePulseCreation(supabase: SupabaseClient, payload: MondayWebh
   }
 }
 
-async function handleColumnUpdate(supabase: SupabaseClient, payload: MondayWebhookPayload) {
-  console.log("[v0] Handling column update for pulse:", payload.pulseId)
-
-  const MEMBERS_BOARD_ID = 123456789 // Replace with actual member board ID
-  const CONTRACTS_BOARD_ID = 987654321 // Replace with actual contract board ID
-
-  if (payload.boardId === MEMBERS_BOARD_ID) {
-    await handleMemberColumnUpdate(supabase, payload)
-  } else if (payload.boardId === CONTRACTS_BOARD_ID) {
-    await handleContractColumnUpdate(supabase, payload)
-  }
-}
+// handleColumnUpdate - kept for reference, routing now done in POST handler
+// async function handleColumnUpdate(supabase: SupabaseClient, payload: MondayWebhookPayload) {
+//   console.log("[v0] Handling column update for pulse:", payload.pulseId)
+//   const MEMBERS_BOARD_ID = 18092113859
+//   const CONTRACTS_BOARD_ID = 18092113859
+//   if (payload.boardId === MEMBERS_BOARD_ID) {
+//     await handleMemberColumnUpdate(supabase, payload)
+//   } else if (payload.boardId === CONTRACTS_BOARD_ID) {
+//     await handleContractColumnUpdate(supabase, payload)
+//   }
+// }
 
 async function handleMemberColumnUpdate(supabase: SupabaseClient, payload: MondayWebhookPayload) {
   const mondayMemberId = payload.pulseId.toString()
   const updateData: MemberUpdateData = { updated_at: new Date().toISOString() }
 
   switch (payload.columnId) {
-    case "email":
-      if (payload.value?.email?.email) {
-        updateData.email = payload.value.email.email
+    case "long_text_mkwb9yh5": // email column
+      if (payload.value?.text) {
+        updateData.email = payload.value.text
       }
       break
-    case "phone":
+    case "phone_mkwaaa5n": // phone column
       if (payload.value?.phone) {
         updateData.phone = payload.value.phone
       }
       break
-    case "status":
+    case "color_mkwaxzng": // status column
       if (payload.value?.label?.text) {
         updateData.status = payload.value.label.text.toLowerCase()
       }
@@ -284,22 +283,22 @@ async function handleContractColumnUpdate(supabase: SupabaseClient, payload: Mon
     case "member":
       // Handle member assignment - you'd need to map Monday member ID to your member ID
       break
-    case "start_date":
+    case "date_mkwac0x5": // start_date column
       if (payload.value?.date?.date) {
         updateData.start_date = payload.value.date.date
       }
       break
-    case "end_date":
+    case "date_mkwa98h": // end_date column
       if (payload.value?.date?.date) {
         updateData.end_date = payload.value.date.date
       }
       break
-    case "monthly_fee":
-      if (payload.value?.numbers) {
-        updateData.monthly_fee = Number.parseFloat(payload.value.numbers)
+    case "text_mkwbp91v": // monthly_fee column
+      if (payload.value?.text) {
+        updateData.monthly_fee = Number.parseFloat(payload.value.text)
       }
       break
-    case "status":
+    case "color_mkwaxzng": // status column
       if (payload.value?.label?.text) {
         updateData.status = payload.value.label.text.toLowerCase()
       }
