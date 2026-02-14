@@ -45,13 +45,13 @@ export async function POST(request: Request) {
     const response = NextResponse.json({ success: true, session })
     response.cookies.set('dev-session', JSON.stringify(session), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Dev-only endpoint, never runs in production
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 // 24 hours
     })
 
     return response
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

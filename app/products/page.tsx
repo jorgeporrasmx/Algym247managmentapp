@@ -172,7 +172,7 @@ export default function ProductsPage() {
                       <Button 
                         size="sm" 
                         onClick={() => handleAddToCart(product)}
-                        disabled={!product.stock || product.stock <= 0}
+                        disabled={!product.stock || parseInt(product.stock) <= 0}
                       >
                         <ShoppingCart className="h-4 w-4 mr-1" />
                         Agregar

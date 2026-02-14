@@ -110,7 +110,7 @@ export async function markPaymentPaid(update: PaymentStatusUpdate): Promise<{ su
  * Validate webhook signature (stub implementation)
  * In Sprint 4, this will validate the real Fiserv webhook signature
  */
-export async function validateWebhookSignature(payload: string, signature: string): Promise<boolean> {
+export async function validateWebhookSignature(_payload: string, signature: string): Promise<boolean> {
   try {
     // Stub implementation - always returns true for testing
     // In real implementation, this would validate the Fiserv webhook signature

@@ -11,7 +11,13 @@ import Link from "next/link"
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get("order")
-  const [orderDetails, setOrderDetails] = useState<any>(null)
+  const [orderDetails, setOrderDetails] = useState<{
+    id: string;
+    transaction_id: string;
+    total: number;
+    items: Array<{ name: string; quantity: number; price: number }>;
+    created_at: string;
+  } | null>(null)
 
   useEffect(() => {
     if (orderId) {

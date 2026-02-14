@@ -101,8 +101,8 @@ async function handleProductChanges(payload: MondayWebhookPayload) {
   }
 }
 
-// Export function to check if cache should be invalidated
-export function shouldInvalidateProductCache(lastCacheTime: number): boolean {
+// Function to check if cache should be invalidated (internal use only)
+function shouldInvalidateProductCache(lastCacheTime: number): boolean {
   return productCacheInvalidationTime > lastCacheTime
 }
 

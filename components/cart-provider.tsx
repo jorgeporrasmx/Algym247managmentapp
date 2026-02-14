@@ -35,13 +35,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return { total, itemCount }
   }
 
-  const addToCart = (product: any, quantity: number = 1) => {
+  const addToCart = (product: { product_id: string; name: string; price: number; stock?: number | string; brand?: string; category?: string }, quantity: number = 1) => {
     setCart(prevCart => {
       const existingItem = prevCart.items.find(item => item.product_id === product.product_id)
       
+      const stockNum = typeof product.stock === 'string' ? parseInt(product.stock) || 999 : product.stock || 999
       let newItems: CartItem[]
       if (existingItem) {
-        const newQuantity = Math.min(existingItem.quantity + quantity, product.stock || 999)
+        const newQuantity = Math.min(existingItem.quantity + quantity, stockNum)
         newItems = prevCart.items.map(item =>
           item.product_id === product.product_id
             ? { ...item, quantity: newQuantity }
@@ -49,14 +50,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         )
       } else {
         const newItem: CartItem = {
-          id: product.id,
+          id: product.product_id, // Using product_id since id is not in the type
           product_id: product.product_id,
           name: product.name,
           price: product.price,
-          quantity: Math.min(quantity, product.stock || 999),
+          quantity: Math.min(quantity, stockNum),
           brand: product.brand,
           category: product.category,
-          max_stock: product.stock || 999
+          max_stock: stockNum
         }
         newItems = [...prevCart.items, newItem]
       }

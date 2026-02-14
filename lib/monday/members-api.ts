@@ -10,7 +10,7 @@ export interface MondayMember {
   column_values: Array<{
     id: string
     text: string
-    value: any
+    value: string | null
   }>
 }
 
@@ -50,7 +50,7 @@ export class MondayMembersAPI {
     return MondayMembersAPI.instance
   }
   
-  private async makeQuery(query: string, variables?: any) {
+  private async makeQuery(query: string, variables?: Record<string, unknown>) {
     try {
       const response = await fetch(MONDAY_API_URL, {
         method: 'POST',
@@ -85,7 +85,8 @@ export class MondayMembersAPI {
   
   // Convert Firebase member to Monday column values
   private memberToColumnValues(member: Member): string {
-    const columnValues: any = {}
+    // Monday column values can be strings or various object types depending on column type
+    const columnValues: Record<string, unknown> = {}
     
     COLUMN_MAPPINGS.forEach(mapping => {
       const value = member[mapping.firebase_field]
@@ -288,36 +289,37 @@ export class MondayMembersAPI {
       
       const value = column.value ? JSON.parse(column.value) : column.text
       
+      const memberAny = member as Record<string, unknown>
       switch (mapping.type) {
         case 'text':
         case 'email':
           if (column.text) {
-            (member as any)[mapping.firebase_field] = column.text
+            memberAny[mapping.firebase_field] = column.text
           }
           break
         case 'phone':
           if (value?.phone) {
-            (member as any)[mapping.firebase_field] = value.phone
+            memberAny[mapping.firebase_field] = value.phone
           }
           break
         case 'date':
           if (value?.date) {
-            (member as any)[mapping.firebase_field] = new Date(value.date)
+            memberAny[mapping.firebase_field] = new Date(value.date)
           }
           break
         case 'status':
           if (value?.label) {
-            (member as any)[mapping.firebase_field] = value.label.toLowerCase()
+            memberAny[mapping.firebase_field] = value.label.toLowerCase()
           }
           break
         case 'number':
           if (column.text) {
-            (member as any)[mapping.firebase_field] = parseFloat(column.text)
+            memberAny[mapping.firebase_field] = parseFloat(column.text)
           }
           break
         case 'dropdown':
           if (value?.labels?.[0]) {
-            (member as any)[mapping.firebase_field] = value.labels[0]
+            memberAny[mapping.firebase_field] = value.labels[0]
           }
           break
       }

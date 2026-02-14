@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { createClient } from "@/lib/client"
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { SharedSidebar } from "@/components/shared-sidebar"
@@ -149,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Set up Supabase auth listener after successful authentication
       const authListener = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        async (event: AuthChangeEvent, session: Session | null) => {
           if (event === "SIGNED_OUT") {
             setUser(null)
             router.push("/auth/login")

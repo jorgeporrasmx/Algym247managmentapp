@@ -1,4 +1,4 @@
-import { Product, Sale, StockMovement } from "@/lib/types/inventory"
+import { Product, Sale } from "@/lib/types/inventory"
 
 const MONDAY_API_URL = 'https://api.monday.com/v2'
 const MONDAY_API_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjU0NTg4Mzg0MiwiYWFpIjoxMSwidWlkIjoxNzQzODU4OCwiaWFkIjoiMjAyNS0wOC0wMVQxODo0NzoyNy4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6NzY2MDA2NSwicmduIjoidXNlMSJ9.LvuqR-VN5x3_MZhm1gGYem6Y5Ads01RSNrQB2qctw88'
@@ -17,7 +17,7 @@ export class MondayAPIService {
     return MondayAPIService.instance
   }
 
-  private async makeQuery(query: string, variables?: any) {
+  private async makeQuery(query: string, variables?: Record<string, unknown>) {
     try {
       const response = await fetch(MONDAY_API_URL, {
         method: 'POST',
@@ -115,7 +115,7 @@ export class MondayAPIService {
           return true
         }
       }
-    } catch (error) {
+    } catch (_error) {
       console.log('Could not check webhook cache status, using time-based cache')
     }
 
@@ -141,9 +141,9 @@ export class MondayAPIService {
       console.log('Monday Board Data:', board.items_page.items.length, 'items found')
       
       // Map Monday items to our Product interface
-      const products: Product[] = board.items_page.items.map((item: any) => {
-        const columnValues = item.column_values.reduce((acc: any, col: any) => {
-          acc[col.id] = col.text || col.value
+      const products: Product[] = board.items_page.items.map((item: { id: string; name: string; column_values: Array<{ id: string; text?: string; value?: string }> }) => {
+        const columnValues = item.column_values.reduce((acc: Record<string, string>, col: { id: string; text?: string; value?: string }) => {
+          acc[col.id] = col.text || col.value || ''
           return acc
         }, {})
 
@@ -157,7 +157,7 @@ export class MondayAPIService {
           category: columnValues.text_mkvf142x || 'Sin categoría',
           created_at: new Date().toISOString()
         }
-      }).filter(product => product.name) // Filter out items without names
+      }).filter((product: Product) => product.name) // Filter out items without names
 
       // Update cache
       this.productCache = products
@@ -178,7 +178,7 @@ export class MondayAPIService {
     }
   }
 
-  private parseNumber(value: string | any): number {
+  private parseNumber(value: string | number | null | undefined): number {
     if (typeof value === 'number') return value
     if (typeof value === 'string') {
       const parsed = parseFloat(value.replace(/[^0-9.-]/g, ''))
@@ -319,7 +319,7 @@ export class MondayAPIService {
     }
   }
 
-  async addStock(productId: string, quantity: number, reason: string = "Reposición"): Promise<boolean> {
+  async addStock(productId: string, quantity: number, _reason: string = "Reposición"): Promise<boolean> {
     return this.updateProductStock(productId, quantity, 'add')
   }
 

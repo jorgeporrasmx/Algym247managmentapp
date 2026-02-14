@@ -310,7 +310,7 @@ export class MembersService {
     mondayItemId?: string
   ): Promise<void> {
     try {
-      const updates: any = {
+      const updates: { sync_status: string; last_synced_at: ReturnType<typeof serverTimestamp>; sync_error?: string; monday_item_id?: string } = {
         sync_status: status,
         last_synced_at: serverTimestamp()
       }
