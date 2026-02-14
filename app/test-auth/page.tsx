@@ -6,7 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link"
 
 export default function TestAuthPage() {
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<{
+    user: { email: string; name: string; role: string; id: string };
+    token: string;
+    expiresAt: string;
+  } | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {

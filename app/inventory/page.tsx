@@ -8,11 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AuthenticatedLayout } from "@/components/authenticated-layout"
 import { FinancialProtectedSection } from "@/components/ui/protected-section"
 import { GoogleSheetsService } from "@/lib/google-sheets"
-import { Product, Sale, DailyMetrics } from "@/lib/types/inventory"
+import { Product, DailyMetrics } from "@/lib/types/inventory"
 import { 
   ShoppingCart, Package, TrendingUp, AlertTriangle, 
   DollarSign, CreditCard, Banknote, ArrowUp,
-  Plus, Minus, Search, Calendar, CalendarDays, ChevronLeft, ChevronRight
+  Plus, Minus, Calendar, CalendarDays, ChevronLeft, ChevronRight
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,7 +20,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [dailyMetrics, setDailyMetrics] = useState<DailyMetrics | null>(null)
-  const [periodMetrics, setPeriodMetrics] = useState<any>(null)
+  const [periodMetrics, setPeriodMetrics] = useState<{
+    period?: string;
+    period_label?: string;
+    start_date?: string;
+    end_date?: string;
+    total_sales: number;
+    total_revenue?: number;
+    average_sale?: number;
+    transaction_count?: number;
+    avg_ticket?: number;
+    cash_sales?: number;
+    card_sales?: number;
+    transfer_sales?: number;
+    cash_percentage?: number;
+    card_percentage?: number;
+    transfer_percentage?: number;
+    daily_average?: number;
+    product_sales?: number;
+    service_sales?: number;
+    combo_sales?: number;
+    top_products: { product_name: string; quantity_sold: number; revenue: number }[];
+  } | null>(null)
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'custom'>('month')
@@ -40,6 +61,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadData = async () => {
@@ -47,7 +69,7 @@ export default function InventoryPage() {
       const [productsData, metricsData, periodData, lowStockData] = await Promise.all([
         sheetsService.getProducts(),
         sheetsService.getDailyMetrics(),
-        sheetsService.getMetricsByPeriod(selectedPeriod, selectedDate.toISOString().split('T')[0]),
+        sheetsService.getMetricsByPeriod(selectedPeriod === 'custom' ? 'month' : selectedPeriod, selectedDate.toISOString().split('T')[0]),
         sheetsService.getLowStockProducts()
       ])
       
@@ -810,7 +832,7 @@ export default function InventoryPage() {
               <CardContent>
                 <div className="space-y-3">
                   {periodMetrics?.top_products?.length ? (
-                    periodMetrics.top_products.map((product: any, index: number) => (
+                    periodMetrics.top_products.map((product: { product_name: string; quantity_sold: number; revenue: number }, index: number) => (
                       <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">

@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Set up Supabase auth listener after successful authentication
       const authListener = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        async (event: string, session: { user: { id: string; email?: string } } | null) => {
           if (event === "SIGNED_OUT") {
             setUser(null)
             router.push("/auth/login")

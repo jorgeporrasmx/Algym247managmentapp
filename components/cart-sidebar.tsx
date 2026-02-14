@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCart } from "@/components/cart-provider"
-import { ShoppingCart, Plus, Minus, Trash2, X } from "lucide-react"
+import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react"
 import Link from "next/link"
 
 export function CartSidebar() {

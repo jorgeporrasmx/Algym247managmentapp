@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { MondayAPIService } from "@/lib/monday-api"
+import { createClient } from "@/lib/server"
 
 export async function GET(request: NextRequest) {
   try {

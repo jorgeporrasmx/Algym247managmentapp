@@ -76,6 +76,14 @@ export interface Member {
 
 const COLLECTION_NAME = 'members'
 
+// Helper to check if Firebase is available
+function getFirestore() {
+  if (!db) {
+    throw new Error('Firebase not configured. Please set up Firebase environment variables.')
+  }
+  return db
+}
+
 export class MembersService {
   private static instance: MembersService
   
@@ -85,10 +93,16 @@ export class MembersService {
     }
     return MembersService.instance
   }
+
+  // Check if Firebase is available
+  isFirebaseConfigured(): boolean {
+    return db !== null
+  }
   
   // Create a new member
   async createMember(memberData: Omit<Member, 'id'>): Promise<Member> {
     try {
+      const firestore = getFirestore()
       const fullName = memberData.name || 
         `${memberData.first_name} ${memberData.paternal_last_name}`.trim()
       
@@ -101,7 +115,7 @@ export class MembersService {
         version: memberData.version || '1.0'
       }
       
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), docData)
+      const docRef = await addDoc(collection(firestore, COLLECTION_NAME), docData)
       
       return {
         ...memberData,
@@ -119,7 +133,7 @@ export class MembersService {
   // Get a single member by ID
   async getMember(id: string): Promise<Member | null> {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id)
+      const docRef = doc(getFirestore(), COLLECTION_NAME, id)
       const docSnap = await getDoc(docRef)
       
       if (!docSnap.exists()) {
@@ -151,7 +165,7 @@ export class MembersService {
       const { pageSize = 50, lastDoc, status, searchTerm } = options
       
       let q = query(
-        collection(db, COLLECTION_NAME),
+        collection(getFirestore(), COLLECTION_NAME),
         orderBy('created_at', 'desc'),
         limit(pageSize + 1)
       )
@@ -203,7 +217,7 @@ export class MembersService {
   // Update a member
   async updateMember(id: string, updates: Partial<Member>): Promise<void> {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id)
+      const docRef = doc(getFirestore(), COLLECTION_NAME, id)
       
       // Generate full name if name parts are updated
       let fullName = updates.name
@@ -242,7 +256,7 @@ export class MembersService {
   // Hard delete a member (permanent)
   async hardDeleteMember(id: string): Promise<void> {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id)
+      const docRef = doc(getFirestore(), COLLECTION_NAME, id)
       await deleteDoc(docRef)
     } catch (error) {
       console.error('Error hard deleting member:', error)
@@ -258,7 +272,7 @@ export class MembersService {
     monday_item_id?: string
   }): Promise<Member[]> {
     try {
-      let q = query(collection(db, COLLECTION_NAME))
+      let q = query(collection(getFirestore(), COLLECTION_NAME))
       
       if (criteria.email) {
         q = query(q, where('email', '==', criteria.email))
@@ -286,7 +300,7 @@ export class MembersService {
   async getMembersNeedingSync(): Promise<Member[]> {
     try {
       const q = query(
-        collection(db, COLLECTION_NAME),
+        collection(getFirestore(), COLLECTION_NAME),
         where('sync_status', '==', 'pending')
       )
       
@@ -310,7 +324,7 @@ export class MembersService {
     mondayItemId?: string
   ): Promise<void> {
     try {
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         sync_status: status,
         last_synced_at: serverTimestamp()
       }
@@ -323,7 +337,7 @@ export class MembersService {
         updates.monday_item_id = mondayItemId
       }
       
-      const docRef = doc(db, COLLECTION_NAME, id)
+      const docRef = doc(getFirestore(), COLLECTION_NAME, id)
       await updateDoc(docRef, updates)
     } catch (error) {
       console.error('Error updating sync status:', error)
@@ -351,7 +365,7 @@ export class MembersService {
       }
       
       // Get all members for stats (in production, use aggregation queries)
-      const querySnapshot = await getDocs(collection(db, COLLECTION_NAME))
+      const querySnapshot = await getDocs(collection(getFirestore(), COLLECTION_NAME))
       
       querySnapshot.docs.forEach(doc => {
         const member = doc.data() as Member

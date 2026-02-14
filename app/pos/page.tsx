@@ -12,7 +12,7 @@ import {
   DollarSign, CreditCard, Banknote, Package,
   User, UserPlus
 } from "lucide-react"
-import { fetchJSON, handleAPIError } from "@/lib/http-utils"
+import { fetchJSON } from "@/lib/http-utils"
 
 interface Product {
   id: string
@@ -29,7 +29,7 @@ export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
-  const [selectedMember, setSelectedMember] = useState<any>(null)
+  const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email?: string } | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash")
   const [loading, setLoading] = useState(true)
 
@@ -103,7 +103,7 @@ export default function POSPage() {
         const error = await response.json()
         alert(`Error: ${error.message}`)
       }
-    } catch (error) {
+    } catch (_error) {
       alert("Error al procesar la venta")
     }
   }

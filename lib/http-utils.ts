@@ -46,7 +46,7 @@ export async function fetchJSON<T>(
   
   try {
     return await response.json();
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Error al procesar la respuesta del servidor.');
   }
 }

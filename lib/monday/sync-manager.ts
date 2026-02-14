@@ -290,7 +290,7 @@ export class MondaySyncManager {
       itemId: string
       boardId: string
       columnId?: string
-      value?: any
+      value?: unknown
     }
   }): Promise<void> {
     const { event } = data

@@ -249,7 +249,7 @@ export class GoogleSheetsService {
     })
 
     const topProducts = Object.entries(productSales)
-      .map(([productId, data]) => ({
+      .map(([_productId, data]) => ({
         product_name: data.name,
         quantity_sold: data.quantity,
         revenue: data.revenue
@@ -371,7 +371,7 @@ export class GoogleSheetsService {
     })
 
     const topProducts = Object.entries(productSalesMap)
-      .map(([productId, data]) => ({
+      .map(([_productId, data]) => ({
         product_name: data.name,
         quantity_sold: data.quantity,
         revenue: data.revenue
@@ -503,7 +503,7 @@ export class GoogleSheetsService {
     })
 
     const topProducts = Object.entries(productSalesMap)
-      .map(([productId, data]) => ({
+      .map(([_productId, data]) => ({
         product_name: data.name,
         quantity_sold: data.quantity,
         revenue: data.revenue

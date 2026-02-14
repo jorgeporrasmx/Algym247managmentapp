@@ -10,7 +10,7 @@ export interface MondayMember {
   column_values: Array<{
     id: string
     text: string
-    value: any
+    value: unknown
   }>
 }
 
@@ -50,7 +50,7 @@ export class MondayMembersAPI {
     return MondayMembersAPI.instance
   }
   
-  private async makeQuery(query: string, variables?: any) {
+  private async makeQuery(query: string, variables?: Record<string, unknown>) {
     try {
       const response = await fetch(MONDAY_API_URL, {
         method: 'POST',
@@ -85,7 +85,7 @@ export class MondayMembersAPI {
   
   // Convert Firebase member to Monday column values
   private memberToColumnValues(member: Member): string {
-    const columnValues: any = {}
+    const columnValues: Record<string, unknown> = {}
     
     COLUMN_MAPPINGS.forEach(mapping => {
       const value = member[mapping.firebase_field]
@@ -286,38 +286,38 @@ export class MondayMembersAPI {
       const mapping = COLUMN_MAPPINGS.find(m => m.monday_column_id === column.id)
       if (!mapping) return
       
-      const value = column.value ? JSON.parse(column.value) : column.text
+      const value = column.value ? JSON.parse(String(column.value)) : column.text
       
       switch (mapping.type) {
         case 'text':
         case 'email':
           if (column.text) {
-            (member as any)[mapping.firebase_field] = column.text
+            (member as Record<string, unknown>)[mapping.firebase_field] = column.text
           }
           break
         case 'phone':
           if (value?.phone) {
-            (member as any)[mapping.firebase_field] = value.phone
+            (member as Record<string, unknown>)[mapping.firebase_field] = value.phone
           }
           break
         case 'date':
           if (value?.date) {
-            (member as any)[mapping.firebase_field] = new Date(value.date)
+            (member as Record<string, unknown>)[mapping.firebase_field] = new Date(value.date)
           }
           break
         case 'status':
           if (value?.label) {
-            (member as any)[mapping.firebase_field] = value.label.toLowerCase()
+            (member as Record<string, unknown>)[mapping.firebase_field] = value.label.toLowerCase()
           }
           break
         case 'number':
           if (column.text) {
-            (member as any)[mapping.firebase_field] = parseFloat(column.text)
+            (member as Record<string, unknown>)[mapping.firebase_field] = parseFloat(column.text)
           }
           break
         case 'dropdown':
           if (value?.labels?.[0]) {
-            (member as any)[mapping.firebase_field] = value.labels[0]
+            (member as Record<string, unknown>)[mapping.firebase_field] = value.labels[0]
           }
           break
       }

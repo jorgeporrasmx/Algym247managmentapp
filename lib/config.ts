@@ -20,14 +20,6 @@ class ConfigError extends Error {
   }
 }
 
-function getRequiredEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value || value === '') {
-    throw new ConfigError(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
 function validateSupabaseConfig(url: string, key: string): void {
   const invalidValues = [
     'https://your-project.supabase.co',

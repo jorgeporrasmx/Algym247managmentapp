@@ -39,7 +39,7 @@ export class EmployeesService {
         employee_id: "GER001",
         salary: 45000,
         access_level: AccessLevel.DIRECCION,
-        manager: null,
+        manager: undefined,
         work_schedule: "Lunes a Viernes 8:00-18:00",
         skills: "Administración, Liderazgo, Finanzas",
         certifications: "MBA, Certificación en Fitness",
