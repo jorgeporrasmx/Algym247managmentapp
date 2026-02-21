@@ -403,9 +403,10 @@ export class MembersService {
 const membersServiceInstance = MembersService.getInstance()
 
 // Export individual functions for backwards compatibility
-export const getMembers = membersServiceInstance.getMembers.bind(membersServiceInstance)
-export const getMemberById = membersServiceInstance.getMemberById.bind(membersServiceInstance)
-export const getMemberByMondayId = membersServiceInstance.getMemberByMondayId.bind(membersServiceInstance)
+export const getMembers = membersServiceInstance.listMembers.bind(membersServiceInstance)
+export const getMemberById = membersServiceInstance.getMember.bind(membersServiceInstance)
+export const getMemberByMondayId = (mondayId: string) => 
+  membersServiceInstance.searchMembers({ monday_item_id: mondayId }).then(members => members[0] || null)
 export const createMember = membersServiceInstance.createMember.bind(membersServiceInstance)
 export const updateMember = membersServiceInstance.updateMember.bind(membersServiceInstance)
 export const deleteMember = membersServiceInstance.deleteMember.bind(membersServiceInstance)
