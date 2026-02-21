@@ -399,4 +399,15 @@ export class MembersService {
   }
 }
 
-export default MembersService.getInstance()
+// Singleton instance
+const membersServiceInstance = MembersService.getInstance()
+
+// Export individual functions for backwards compatibility
+export const getMembers = membersServiceInstance.getMembers.bind(membersServiceInstance)
+export const getMemberById = membersServiceInstance.getMemberById.bind(membersServiceInstance)
+export const getMemberByMondayId = membersServiceInstance.getMemberByMondayId.bind(membersServiceInstance)
+export const createMember = membersServiceInstance.createMember.bind(membersServiceInstance)
+export const updateMember = membersServiceInstance.updateMember.bind(membersServiceInstance)
+export const deleteMember = membersServiceInstance.deleteMember.bind(membersServiceInstance)
+
+export default membersServiceInstance
