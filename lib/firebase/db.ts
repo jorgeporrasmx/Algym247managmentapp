@@ -291,9 +291,9 @@ export function from(collectionName: string) {
           return remove(collectionName, value as string)
         }
         // For other fields, find and delete
-        const result = await getByField(collectionName, field, value)
-        if (result.data && 'id' in result.data) {
-          return remove(collectionName, (result.data as { id: string }).id)
+        const result = await getByField<{ id: string }>(collectionName, field, value)
+        if (result.data && typeof result.data === 'object' && result.data !== null && 'id' in result.data) {
+          return remove(collectionName, result.data.id)
         }
         return { error: new Error('Document not found') }
       }
