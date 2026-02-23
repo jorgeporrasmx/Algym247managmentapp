@@ -128,16 +128,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const payload: MondayWebhookPayload = await request.json()
+    const payload = await request.json()
 
-    console.log("[Monday Webhook] Received:", JSON.stringify(payload, null, 2))
+    // Handle Monday.com webhook verification challenge
+    if (payload.challenge) {
+      console.log("[Monday Webhook] Challenge received:", payload.challenge)
+      return NextResponse.json({ challenge: payload.challenge })
+    }
+
+    const webhookPayload = payload as MondayWebhookPayload
+    console.log("[Monday Webhook] Received:", JSON.stringify(webhookPayload, null, 2))
 
     // Log webhook for debugging
     try {
       const supabase = await createClient()
       await supabase.from("webhook_log").insert({
-        webhook_type: payload.type,
-        payload: payload,
+        webhook_type: webhookPayload.type,
+        payload: webhookPayload,
         status: "received",
       })
     } catch (logError) {
@@ -149,21 +156,21 @@ export async function POST(request: NextRequest) {
     const MEMBERS_BOARD_ID = 18092113859   // Al Gym members board
     const CONTRACTS_BOARD_ID = 18092113859 // Al Gym contracts board (same board)
 
-    if (payload.boardId === PRODUCTS_BOARD_ID) {
-      await handleProductChanges(payload)
-    } else if (payload.boardId === MEMBERS_BOARD_ID) {
+    if (webhookPayload.boardId === PRODUCTS_BOARD_ID) {
+      await handleProductChanges(webhookPayload)
+    } else if (webhookPayload.boardId === MEMBERS_BOARD_ID) {
       const supabase = await createClient()
-      if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload)
-      } else if (payload.type === "update_column_value") {
-        await handleMemberColumnUpdate(supabase, payload)
+      if (webhookPayload.type === "create_pulse") {
+        await handlePulseCreation(supabase, webhookPayload)
+      } else if (webhookPayload.type === "update_column_value") {
+        await handleMemberColumnUpdate(supabase, webhookPayload)
       }
-    } else if (payload.boardId === CONTRACTS_BOARD_ID) {
+    } else if (webhookPayload.boardId === CONTRACTS_BOARD_ID) {
       const supabase = await createClient()
-      if (payload.type === "create_pulse") {
-        await handlePulseCreation(supabase, payload)
-      } else if (payload.type === "update_column_value") {
-        await handleContractColumnUpdate(supabase, payload)
+      if (webhookPayload.type === "create_pulse") {
+        await handlePulseCreation(supabase, webhookPayload)
+      } else if (webhookPayload.type === "update_column_value") {
+        await handleContractColumnUpdate(supabase, webhookPayload)
       }
     }
 
