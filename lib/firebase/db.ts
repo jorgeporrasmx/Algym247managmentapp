@@ -6,23 +6,29 @@
  * that mirrors Supabase's API while using Firebase Firestore.
  */
 
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
   limit,
   QueryConstraint,
   DocumentData,
-  WhereFilterOp
+  WhereFilterOp,
+  Firestore
 } from 'firebase/firestore'
-import { db } from './config'
+import { db as configDb } from './config'
+
+function getDb(): Firestore {
+  if (!configDb) throw new Error('Firebase not configured. Set NEXT_PUBLIC_FIREBASE_* environment variables.')
+  return configDb
+}
 
 export interface QueryOptions {
   filters?: Array<{
@@ -60,8 +66,8 @@ export async function getAll<T>(
     }
     
     const q = constraints.length > 0 
-      ? query(collection(db, collectionName), ...constraints)
-      : collection(db, collectionName)
+      ? query(collection(getDb(), collectionName), ...constraints)
+      : collection(getDb(), collectionName)
     
     const snapshot = await getDocs(q)
     const data = snapshot.docs.map(doc => ({
@@ -84,7 +90,7 @@ export async function getById<T>(
   id: string
 ): Promise<{ data: T | null; error: Error | null }> {
   try {
-    const docRef = doc(db, collectionName, id)
+    const docRef = doc(getDb(), collectionName, id)
     const docSnap = await getDoc(docRef)
     
     if (!docSnap.exists()) {
@@ -113,7 +119,7 @@ export async function getByField<T>(
 ): Promise<{ data: T | null; error: Error | null }> {
   try {
     const q = query(
-      collection(db, collectionName),
+      collection(getDb(), collectionName),
       where(field, '==', value),
       limit(1)
     )
@@ -145,7 +151,7 @@ export async function create<T extends DocumentData>(
   data: T
 ): Promise<{ data: { id: string } | null; error: Error | null }> {
   try {
-    const docRef = await addDoc(collection(db, collectionName), {
+    const docRef = await addDoc(collection(getDb(), collectionName), {
       ...data,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -167,7 +173,7 @@ export async function update(
   data: Partial<DocumentData>
 ): Promise<{ error: Error | null }> {
   try {
-    const docRef = doc(db, collectionName, id)
+    const docRef = doc(getDb(), collectionName, id)
     await updateDoc(docRef, {
       ...data,
       updated_at: new Date().toISOString()
@@ -191,7 +197,7 @@ export async function updateByField(
 ): Promise<{ error: Error | null }> {
   try {
     const q = query(
-      collection(db, collectionName),
+      collection(getDb(), collectionName),
       where(field, '==', fieldValue),
       limit(1)
     )
@@ -223,7 +229,7 @@ export async function remove(
   id: string
 ): Promise<{ error: Error | null }> {
   try {
-    const docRef = doc(db, collectionName, id)
+    const docRef = doc(getDb(), collectionName, id)
     await deleteDoc(docRef)
     
     return { error: null }

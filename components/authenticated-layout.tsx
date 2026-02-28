@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { createClient } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { SharedSidebar } from "@/components/shared-sidebar"
@@ -12,6 +11,8 @@ import Link from "next/link"
 interface User {
   id: string
   email?: string
+  name?: string
+  role?: string
   user_metadata?: {
     name?: string
   }
@@ -53,7 +54,7 @@ export function AuthenticatedLayout({
   return (
     <div className="flex min-h-screen w-full">
       <SharedSidebar />
-      
+
       <div className="flex-1 flex flex-col">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
           <div className="flex flex-1 items-center gap-2">
@@ -61,20 +62,20 @@ export function AuthenticatedLayout({
               <Button variant="ghost" size="sm" asChild>
                 <Link href={backHref}>
                   <ArrowLeft className="h-4 w-4 mr-1" />
-                  Back
+                  Regresar
                 </Link>
               </Button>
             )}
             {title && <h1 className="text-lg font-semibold">{title}</h1>}
           </div>
-          
+
           <div className="flex items-center gap-2">
             {headerActions}
             <Separator orientation="vertical" className="h-4" />
             <span className="text-sm text-muted-foreground">{user?.email}</span>
             <Button size="sm" variant="outline" onClick={signOut}>
               <LogOut className="h-4 w-4 mr-1" />
-              Sign Out
+              Salir
             </Button>
           </div>
         </header>
@@ -93,101 +94,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    let subscription: { unsubscribe: () => void } | null = null;
+    const checkAuth = () => {
+      if (typeof window === 'undefined') {
+        setLoading(false)
+        return
+      }
 
-    const checkAuth = async () => {
-      // Check if Supabase is configured
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const isSupabaseConfigured = supabaseUrl && 
-        supabaseUrl !== 'https://your-project.supabase.co' &&
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'your-anon-key-here'
-
-      if (!isSupabaseConfigured) {
-        // Check for development session (only on client side)
-        if (typeof window !== 'undefined') {
-          const devSessionStr = localStorage.getItem("devSession")
-          if (devSessionStr) {
-            try {
-              const devSession = JSON.parse(devSessionStr)
-              if (devSession && devSession.user) {
-                setUser({
-                  id: devSession.user.id,
-                  email: devSession.user.email,
-                  user_metadata: {
-                    name: devSession.user.name
-                  }
-                })
-                setLoading(false)
-                return
-              }
-            } catch (e) {
-              console.error("Error parsing dev session:", e)
+      // Check for admin dev session
+      const devSessionStr = localStorage.getItem("devSession")
+      if (devSessionStr) {
+        try {
+          const devSession = JSON.parse(devSessionStr)
+          if (devSession && devSession.user) {
+            // Check if session is expired
+            if (devSession.expiresAt && new Date(devSession.expiresAt) < new Date()) {
+              localStorage.removeItem("devSession")
+            } else {
+              setUser({
+                id: devSession.user.id,
+                email: devSession.user.email,
+                name: devSession.user.name,
+                role: devSession.user.role,
+                user_metadata: {
+                  name: devSession.user.name
+                }
+              })
+              setLoading(false)
+              return
             }
           }
+        } catch (e) {
+          console.error("Error parsing dev session:", e)
+          localStorage.removeItem("devSession")
         }
-        
-        setLoading(false)
-        router.push("/auth/login")
-        return
       }
 
-      // Use Supabase authentication
-      const supabase = createClient()
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error || !user) {
-        setLoading(false)
-        router.push("/auth/login")
-        return
-      }
-
-      setUser(user)
-      setLoading(false)
-
-      // Set up Supabase auth listener after successful authentication
-      const authListener = supabase.auth.onAuthStateChange(
-        async (event: string, session: { user: { id: string; email?: string } } | null) => {
-          if (event === "SIGNED_OUT") {
-            setUser(null)
-            router.push("/auth/login")
-          } else if (session?.user) {
-            setUser(session.user)
+      // Check for employee session
+      const employeeSessionStr = localStorage.getItem("employeeSession")
+      if (employeeSessionStr) {
+        try {
+          const employeeSession = JSON.parse(employeeSessionStr)
+          if (employeeSession && employeeSession.id) {
+            setUser({
+              id: employeeSession.id,
+              email: employeeSession.email,
+              name: employeeSession.name,
+              role: employeeSession.access_level || 'employee',
+              user_metadata: {
+                name: employeeSession.name
+              }
+            })
+            setLoading(false)
+            return
           }
+        } catch (e) {
+          console.error("Error parsing employee session:", e)
+          localStorage.removeItem("employeeSession")
         }
-      )
-      subscription = authListener.data
+      }
+
+      // No session found, redirect to login
+      setLoading(false)
+      router.push("/auth/login")
     }
 
     checkAuth()
-
-    // Cleanup function
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe()
-      }
-    }
   }, [router])
 
   const signOut = async () => {
-    // Check if Supabase is configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const isSupabaseConfigured = supabaseUrl && 
-      supabaseUrl !== 'https://your-project.supabase.co'
-
-    if (!isSupabaseConfigured) {
-      // Clear development session (only on client side)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem("devSession")
-      }
-      setUser(null)
-      router.push("/auth/login")
-    } else {
-      const supabase = createClient()
-      await supabase.auth.signOut()
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem("devSession")
+      localStorage.removeItem("employeeSession")
     }
+    setUser(null)
+
+    // Clear the server-side cookie
+    try {
+      await fetch("/api/dev-auth", { method: "DELETE" }).catch(() => {})
+    } catch {
+      // Ignore errors clearing cookie
+    }
+
+    router.push("/auth/login")
   }
 
   if (loading) {
@@ -195,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Cargando...</p>
         </div>
       </div>
     )
@@ -206,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Redirecting to login...</p>
+          <p className="text-muted-foreground">Redirigiendo al inicio de sesión...</p>
         </div>
       </div>
     )
@@ -218,4 +206,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   )
 }
-

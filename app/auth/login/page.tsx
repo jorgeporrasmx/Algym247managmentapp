@@ -2,13 +2,11 @@
 
 import type React from "react"
 
-import { createClient } from "@/lib/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
@@ -31,43 +29,23 @@ export default function Page() {
     setError(null)
 
     try {
-      // Check if Supabase is configured
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const isSupabaseConfigured = supabaseUrl && 
-        supabaseUrl !== 'https://your-project.supabase.co' &&
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== 'your-anon-key-here'
+      const response = await fetch("/api/dev-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
 
-      if (!isSupabaseConfigured) {
-        // Use development authentication
-        const response = await fetch("/api/dev-auth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        })
+      if (!response.ok) {
+        throw new Error("Error de inicio de sesión. Intenta: admin@demo.com / admin123")
+      }
 
-        if (!response.ok) {
-          const text = await response.text()
-          console.error('Auth response:', text)
-          throw new Error("Error de inicio de sesión. Intenta: admin@demo.com / admin123")
-        }
+      const result = await response.json()
 
-        const result = await response.json()
-        
-        if (result.success) {
-          localStorage.setItem("devSession", JSON.stringify(result.session))
-          router.push("/")
-        } else {
-          throw new Error(result.error || "Error de inicio de sesión. Intenta: admin@demo.com / admin123")
-        }
-      } else {
-        // Use Supabase authentication
-        const supabase = createClient()
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        if (error) throw error
+      if (result.success) {
+        localStorage.setItem("devSession", JSON.stringify(result.session))
         router.push("/")
+      } else {
+        throw new Error(result.error || "Error de inicio de sesión. Intenta: admin@demo.com / admin123")
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Ocurrió un error")
@@ -96,7 +74,6 @@ export default function Page() {
       const result = await response.json()
 
       if (response.ok && result.success) {
-        // Store employee session data
         localStorage.setItem("employeeSession", JSON.stringify(result.data))
         router.push("/")
       } else {
@@ -109,23 +86,17 @@ export default function Page() {
     }
   }
 
-  const isDevMode = !process.env.NEXT_PUBLIC_SUPABASE_URL || 
-    process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://your-project.supabase.co'
-
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-foreground">AI Gym 24/7</h1>
           <p className="text-muted-foreground mt-2">Gestión Inteligente de Gimnasio</p>
-          {isDevMode && (
-            <div className="mt-4 p-2 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-md text-sm">
-              <strong>Modo de Desarrollo</strong><br />
-              Usa: admin@demo.com / admin123
-            </div>
-          )}
+          <div className="mt-4 p-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-md text-sm">
+            Usa: <strong>admin@demo.com</strong> / <strong>admin123</strong>
+          </div>
         </div>
-        
+
         <Card className="w-full">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">Iniciar Sesión</CardTitle>
@@ -139,7 +110,7 @@ export default function Page() {
                 <TabsTrigger value="admin">Administrador</TabsTrigger>
                 <TabsTrigger value="employee">Empleado</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="admin" className="space-y-4">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -172,14 +143,8 @@ export default function Page() {
                     {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
                   </Button>
                 </form>
-                <div className="mt-6 text-center text-sm">
-                  ¿No tienes una cuenta?{" "}
-                  <Link href="/auth/sign-up" className="text-primary hover:underline">
-                    Registrarse
-                  </Link>
-                </div>
               </TabsContent>
-              
+
               <TabsContent value="employee" className="space-y-4">
                 <form onSubmit={handleEmployeeLogin} className="space-y-4">
                   <div className="space-y-2">

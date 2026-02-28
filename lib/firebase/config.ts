@@ -14,29 +14,28 @@ const firebaseConfig = {
 }
 
 // Check if Firebase is properly configured
-const isFirebaseConfigured = firebaseConfig.apiKey && 
+const isFirebaseConfigured = firebaseConfig.apiKey &&
   firebaseConfig.apiKey.length > 10 &&
   !firebaseConfig.apiKey.includes('placeholder') &&
   firebaseConfig.projectId &&
   !firebaseConfig.projectId.includes('placeholder')
 
-let app: FirebaseApp
-let db: Firestore
-let auth: Auth
-let storage: FirebaseStorage
+let app: FirebaseApp | null = null
+let db: Firestore | null = null
+let auth: Auth | null = null
+let storage: FirebaseStorage | null = null
 
-if (!isFirebaseConfigured) {
-  throw new Error('Firebase not configured. Please set NEXT_PUBLIC_FIREBASE_* environment variables.')
-}
-
-try {
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
-  db = getFirestore(app)
-  auth = getAuth(app)
-  storage = getStorage(app)
-} catch (error) {
-  console.error('Firebase initialization failed:', error)
-  throw error
+if (isFirebaseConfigured) {
+  try {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+    db = getFirestore(app)
+    auth = getAuth(app)
+    storage = getStorage(app)
+  } catch (error) {
+    console.error('Firebase initialization failed:', error)
+  }
+} else {
+  console.warn('Firebase not configured. Set NEXT_PUBLIC_FIREBASE_* environment variables for full functionality.')
 }
 
 export { db, auth, storage }

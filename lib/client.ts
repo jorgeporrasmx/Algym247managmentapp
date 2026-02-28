@@ -1,42 +1,37 @@
-import { createBrowserClient } from "@supabase/ssr"
+// Legacy Supabase client - DEPRECATED
+// All functionality has been migrated to Firebase.
+// This file is kept as a stub for backwards compatibility.
 
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  console.warn('Supabase client is deprecated. Use Firebase services instead.')
 
-  if (!supabaseUrl || !supabaseAnonKey || 
-      supabaseUrl === 'https://your-project.supabase.co' || 
-      supabaseAnonKey === 'your-anon-key-here') {
-    console.warn('⚠️ Supabase credentials not configured properly')
-    console.warn('Please update your .env.local file with valid Supabase credentials')
-    
-    // Return a mock client for development
-    const mockClient = {
-      auth: {
-        signInWithPassword: async () => ({ 
-          data: { user: null, session: null },
-          error: new Error('Supabase is not configured. Please set up your environment variables.') 
-        }),
-        signOut: async () => ({ error: null }),
-        getUser: async () => ({ data: { user: null }, error: null }),
-        getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: () => ({ 
-          data: { 
-            subscription: { 
-              unsubscribe: () => {} 
-            } 
-          } 
-        })
-      },
-      from: () => ({
-        select: () => Promise.resolve({ data: [], error: null }),
-        insert: () => Promise.resolve({ data: null, error: new Error('Mock client') }),
-        update: () => Promise.resolve({ data: null, error: new Error('Mock client') }),
-        delete: () => Promise.resolve({ data: null, error: new Error('Mock client') })
+  const mockClient = {
+    auth: {
+      signInWithPassword: async () => ({
+        data: { user: null, session: null },
+        error: new Error('Supabase is deprecated. Use Firebase Auth.')
+      }),
+      signOut: async () => ({ error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      getSession: async () => ({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({
+        data: {
+          subscription: {
+            unsubscribe: () => {}
+          }
+        }
+      }),
+      signUp: async () => ({
+        data: { user: null, session: null },
+        error: new Error('Supabase is deprecated. Use Firebase Auth.')
       })
-    }
-    return mockClient as ReturnType<typeof createBrowserClient>
+    },
+    from: () => ({
+      select: () => Promise.resolve({ data: [], error: null }),
+      insert: () => Promise.resolve({ data: null, error: new Error('Use Firebase services') }),
+      update: () => Promise.resolve({ data: null, error: new Error('Use Firebase services') }),
+      delete: () => Promise.resolve({ data: null, error: new Error('Use Firebase services') })
+    })
   }
-
-  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+  return mockClient as never
 }

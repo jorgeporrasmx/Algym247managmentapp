@@ -1,8 +1,8 @@
 import { Product, Sale } from "@/lib/types/inventory"
 
 const MONDAY_API_URL = 'https://api.monday.com/v2'
-const MONDAY_API_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjU0NTg4Mzg0MiwiYWFpIjoxMSwidWlkIjoxNzQzODU4OCwiaWFkIjoiMjAyNS0wOC0wMVQxODo0NzoyNy4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6NzY2MDA2NSwicmduIjoidXNlMSJ9.LvuqR-VN5x3_MZhm1gGYem6Y5Ads01RSNrQB2qctw88'
-const BOARD_ID = '9944534259'
+const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN || ''
+const BOARD_ID = process.env.MONDAY_PRODUCTS_BOARD_ID || '9944534259'
 
 export class MondayAPIService {
   private static instance: MondayAPIService
