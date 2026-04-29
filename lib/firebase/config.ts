@@ -14,30 +14,40 @@ const firebaseConfig = {
 }
 
 // Check if Firebase is properly configured
-const isFirebaseConfigured = firebaseConfig.apiKey && 
+const isFirebaseConfigured = firebaseConfig.apiKey &&
   firebaseConfig.apiKey.length > 10 &&
   !firebaseConfig.apiKey.includes('placeholder') &&
   firebaseConfig.projectId &&
   !firebaseConfig.projectId.includes('placeholder')
 
-let app: FirebaseApp
-let db: Firestore
-let auth: Auth
-let storage: FirebaseStorage
+let _app: FirebaseApp | null = null
+let _db: Firestore | null = null
+let _auth: Auth | null = null
+let _storage: FirebaseStorage | null = null
 
-if (!isFirebaseConfigured) {
-  throw new Error('Firebase not configured. Please set NEXT_PUBLIC_FIREBASE_* environment variables.')
+function ensureInitialized() {
+  if (_app) return
+  if (!isFirebaseConfigured) {
+    throw new Error('Firebase not configured. Please set NEXT_PUBLIC_FIREBASE_* environment variables.')
+  }
+  _app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+  _db = getFirestore(_app)
+  _auth = getAuth(_app)
+  _storage = getStorage(_app)
 }
 
-try {
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
-  db = getFirestore(app)
-  auth = getAuth(app)
-  storage = getStorage(app)
-} catch (error) {
-  console.error('Firebase initialization failed:', error)
-  throw error
-}
+// Lazy getters — only throw when actually accessed at runtime, not at import/build time
+export const db: Firestore = new Proxy({} as Firestore, {
+  get(_, prop) { ensureInitialized(); return (_db as never)[prop] }
+})
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_, prop) { ensureInitialized(); return (_auth as never)[prop] }
+})
+export const storage: FirebaseStorage = new Proxy({} as FirebaseStorage, {
+  get(_, prop) { ensureInitialized(); return (_storage as never)[prop] }
+})
 
-export { db, auth, storage }
+const app: FirebaseApp = new Proxy({} as FirebaseApp, {
+  get(_, prop) { ensureInitialized(); return (_app as never)[prop] }
+})
 export default app
